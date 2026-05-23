@@ -1,0 +1,168 @@
+/* ==========================================================================
+   AURA CONTROL CENTER - MATTE & LUXE TERMINAL STYLE (src/control/controlCenter.css)
+   ========================================================================== */
+
+/* 1. VARIABELEN REPLICATIE UIT TERMINAL */
+.bot-control-root {
+    --bg: #05070a; 
+    --panel: #0b0f17; 
+    --border: #141d2b;
+    --accent: #00bcd4;
+    --cyan: #00bcd4;   /* TOEGEVOEGD: Matcht nu direct met de JS aanroep */
+    --green: #2aa198;
+    --purple: #6366f1;
+    --amber: #2aa198; /* Gelijk getrokken aan de ingetogen terminal-groen */
+    --text-main: #cbd5e1; 
+    --text-dim: #4b586c;
+    --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* 2. RECHTE HOEKEN EN FONT ISOLATIE */
+.bot-control-root,
+.bot-control-root * {
+    box-sizing: border-box;
+    border-radius: 0px !important;
+    font-family: var(--font-mono) !important;
+    font-weight: 400 !important; /* Verwijdert alle lelijke dikke letters */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 3. PANELEN (Ingetogen hardware look) */
+.bot-control-root .panel {
+    background: var(--panel) !important; 
+    border: 1px solid var(--border) !important;
+    box-shadow: none !important; /* Weg met de overdreven schaduw */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.bot-control-root .panel-header {
+    font-size: 9px !important; 
+    font-weight: 700 !important; /* Alleen subtiel dikker voor leesbaarheid op 9px */
+    color: #5d6e85 !important; 
+    text-transform: uppercase !important; 
+    letter-spacing: 0.5px !important; 
+    padding: 12px 15px 8px !important; 
+    border-bottom: 1px solid #080c12 !important;
+    background: rgba(0,0,0,0.25) !important;
+}
+
+.bot-control-root .module-body {
+    background: #080b12 !important; /* Diepere achtergrond net als perf-card */
+    padding: 15px !important;
+}
+
+.bot-control-root .btn-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+/* 4. TERMINAL REPLICATIE KNOOPPEN */
+.bot-control-root .control-btn {
+    background: #0f1420 !important; 
+    border: 1px solid #1a2638 !important; 
+    color: var(--text-dim) !important; 
+    font-size: 10px !important; 
+    text-transform: uppercase !important;
+    padding: 8px !important; 
+    cursor: pointer !important; 
+    outline: none !important;
+    text-align: left !important;
+    width: 100% !important;
+    transition: all 0.2s ease !important;
+}
+
+.bot-control-root .control-btn:not(:disabled):hover { 
+    background: #172033 !important; 
+    color: #fff !important; 
+}
+
+/* 5. INGETOGEN ACTIEVE STATUSEN */
+.bot-control-root .btn-cyan { 
+    border-color: var(--cyan) !important; 
+    color: var(--cyan) !important; 
+    background: rgba(0, 188, 212, 0.04) !important; /* Heel mat en subtiel */
+}
+
+.bot-control-root .btn-purple { 
+    border-color: var(--purple) !important; 
+    color: var(--purple) !important; 
+    background: rgba(99, 102, 241, 0.04) !important;
+}
+
+.bot-control-root .btn-amber { 
+    border-color: var(--amber) !important; 
+    color: var(--amber) !important; 
+    background: rgba(42, 161, 152, 0.04) !important;
+}
+
+/* 6. STATUS BOX EN LABELS */
+.bot-control-root .status-box {
+    border-top: 1px solid var(--border) !important;
+    padding-top: 12px;
+    margin-top: 4px;
+}
+
+.bot-control-root .status-grid {
+    display: grid;
+    grid-template-columns: 1fr 110px;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+/* Zorgt dat ook de labels (WALLET STATUS, etc.) de kleine, strakke styling behouden */
+.bot-control-root .status-grid span:not(.control-value) {
+    font-size: 9px !important;
+    color: #5d6e85 !important;
+    text-transform: uppercase !important;
+}
+
+.bot-control-root .control-value {
+    font-size: 10.5px !important;
+    color: var(--text-main) !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+.bot-control-root .status-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* De fijne, ronde indicator stipjes uit de terminal header */
+.bot-control-root .liveDot {
+    width: 5px !important;
+    height: 5px !important;
+    background-color: var(--text-dim) !important; /* Inactief is gedimd */
+    border-radius: 50% !important;
+}
+
+/* 7. EXECUTION CONSOLE */
+.bot-control-root #execution-console {
+    background: #04060a !important;
+    border: 1px solid var(--border) !important;
+    height: 110px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 15px !important;
+}
+
+.bot-control-root .exec-line {
+    color: var(--text-main) !important;
+    font-size: 10px !important;
+    padding: 3px 0 !important;
+    line-height: 1.5 !important;
+    width: 100%;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border-bottom: 1px solid #080c12 !important;
+}
