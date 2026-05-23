@@ -23,7 +23,7 @@ function acquireBridgeLock(customMs = 200) {
   if (coolDownTimer) clearTimeout(coolDownTimer);
   coolDownTimer = setTimeout(() => {
     coolDownActive = false;
-  }, customMs); // 🔥 LEGO FIX: Gebruikt nu de dynamic cooldown-tijd
+  }, customMs);
   
   return true;
 }
@@ -69,7 +69,10 @@ window.disconnectWallet = bridgeDisconnectWallet;
 window.UIbridge = {
   forceUnlock: function() {
     console.log("🛡️ UIbridge: Emergency unlock uitgevoerd. Sluis gereset.");
-    // 🔥 LEGO FIX: Alleen de cooldown resetten, kernel regelt APP_STATE zelf
     coolDownActive = false;
+    if (coolDownTimer) {
+      clearTimeout(coolDownTimer);
+      coolDownTimer = null;
+    }
   }
 };

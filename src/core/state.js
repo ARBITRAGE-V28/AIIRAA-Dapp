@@ -44,7 +44,13 @@ export function resetState() {
 
 export function setProcessing(value) {
   APP_STATE.isProcessing = value;
-  if (!value) APP_STATE.activeRequestId = null;
+}
+
+export function unlockAfterSuccess() {
+  APP_STATE.isProcessing = false;
+  APP_STATE.activeRequestId = null;
+  APP_STATE.flowState = 'IDLE';
+  APP_STATE.lastInteractionTime = Date.now();
 }
 
 export function setCacheValid(value) {

