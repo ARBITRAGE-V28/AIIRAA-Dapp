@@ -43,28 +43,40 @@ function startWatchdog(requestId) {
   cleanupWatchdog();
   const startTime = Date.now();
   
-  // 1. Ruime absolute failsafe (voor het geval de gebruiker wegloopt bij de computer)
+  // 1. Ruime absolute failsafe
   watchdogInterval = setTimeout(() => {
     if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
-      log("🚨 Watchdog Supervisor: Absolute timeout bereikt. Geforceerde reset!");
+      log("🚨 Watchdog Supervisor: Absolute timeout bereikt.");
       forceCleanupTimeout();
     }
-  }, 45000); // 45 seconden maximale ademruimte voor trage browsers / FaceID
+  }, 60000); // Verhoogd naar 60 seconden, we vangen het nu immers visueel op
 
-  // 2. Slimme activiteits-detector (grijpt in als MetaMask naar de achtergrond verdwijnt)
+  // 2. Interactieve feedback-detector
   dynamicWatchdogListener = () => {
     const elapsed = Date.now() - startTime;
     
-    // Pas activeren als MetaMask minimaal 4 seconden openstaat EN de gebruiker weer op de site klikt of focust
+    // Als de gebruiker na 4 seconden weer op de site klikt terwijl de connectie nog loopt
     if (elapsed > 4000) {
-      if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
-        log("🚨 Watchdog Supervisor: Gebruiker zoekt interactie met site. MetaMask staat waarschijnlijk op de achtergrond. Directe reset!");
-        forceCleanupTimeout();
+      if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId) {
+        
+        // Tijdelijk de listener weghalen zodat deze pop-up niet in een oneindige loop raakt bij opeenvolgende kliks
+        window.removeEventListener('click', dynamicWatchdogListener);
+        
+        log("💡 Watchdog: MetaMask staat vermoedelijk op de achtergrond. Gebruiker informeren...");
+        
+        const retry = confirm("MetaMask staat al open op de achtergrond of wacht op je pincode/wachtwoord.\n\nKlik op 'OK' om de knoppen te resetten en het opnieuw te proberen, of 'Annuleren' om rustig te wachten.");
+        
+        if (retry) {
+          log("🔄 Gebruiker heeft handmatige reset gekozen via pop-up.");
+          forceCleanupTimeout();
+        } else {
+          // Als ze willen wachten, zetten we de listener weer terug voor een eventuele volgende klik
+          window.addEventListener('click', dynamicWatchdogListener);
+        }
       }
     }
   };
 
-  // Luister naar zowel kliks als tabblad-focus op het hoofdvenster
   window.addEventListener('click', dynamicWatchdogListener);
   window.addEventListener('focus', dynamicWatchdogListener);
 }
