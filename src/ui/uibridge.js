@@ -9,7 +9,7 @@ import { APP_STATE, touchInteraction } from '../core/state.js';
 let coolDownActive = false;
 let coolDownTimer = null;
 
-function acquireBridgeLock() {
+function acquireBridgeLock(customMs = 200) {
   // Als de kernel verwerkt óf de klik-cooldown loopt, breek direct af
   if (APP_STATE.isProcessing || coolDownActive) {
     console.warn(`🛡️ UIbridge: Click blocked. Kernel Processing: ${APP_STATE.isProcessing}, Cooldown: ${coolDownActive}`);
@@ -23,16 +23,16 @@ function acquireBridgeLock() {
   if (coolDownTimer) clearTimeout(coolDownTimer);
   coolDownTimer = setTimeout(() => {
     coolDownActive = false;
-  }, 1500); // 🔥 LEGO FIX: Verhoogd naar 1500ms voor Vercel stabiliteit
+  }, customMs); // 🔥 LEGO FIX: Gebruikt nu de dynamic cooldown-tijd
   
   return true;
 }
 
 async function bridgeConnectWallet() {
   console.log("🎯 UIbridge: bridgeConnectWallet aangeroepen!");
-  if (!acquireBridgeLock()) return;
+  // 🔥 LEGO FIX: Geef de connectie expliciet 1500ms mee voor MetaMask stabiliteit
+  if (!acquireBridgeLock(1500)) return;
   
-  // Start de async flow zonder dat de UI-lock mechanisch afhankelijk is van de afloop van de promise
   try {
     await connectWallet();
   } catch (err) {
@@ -42,15 +42,15 @@ async function bridgeConnectWallet() {
 
 function bridgeActivateBot() {
   console.log("🎯 UIbridge: bridgeActivateBot aangeroepen!");
-  // 🔥 LEGO FIX: Gebruikt nu de centrale lock zodat de 1500ms cooldown actief wordt
-  if (!acquireBridgeLock()) return;
+  // 🔥 LEGO FIX: Snelle cooldown (200ms) voor directe UI response
+  if (!acquireBridgeLock(200)) return;
   activateBot();
 }
 
 function bridgeAuthorizeTrading() {
   console.log("🎯 UIbridge: bridgeAuthorizeTrading aangeroepen!");
-  // 🔥 LEGO FIX: Gebruikt nu de centrale lock zodat de 1500ms cooldown actief wordt
-  if (!acquireBridgeLock()) return;
+  // 🔥 LEGO FIX: Snelle cooldown (200ms) voor directe UI response
+  if (!acquireBridgeLock(200)) return;
   authorizeTrading();
 }
 

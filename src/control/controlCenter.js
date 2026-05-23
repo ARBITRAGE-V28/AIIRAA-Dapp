@@ -36,22 +36,10 @@ if (window.ethereum) {
   });
 }
 
-// 🔥 LEGO FIX: Vervang de oude handlers door een dynamische activiteits-listener
-let dynamicWatchdogListener = null;
+// Bijhouden van de focus handler om memory leaks en dubbele registraties te voorkomen
+let activeFocusHandler = null;
 
 function startWatchdog(requestId) {
-  cleanupWatchdog();
-  const startTime = Date.now();
-  
-  // 1. Ruime absolute failsafe
-  watchdogInterval = setTimeout(() => {
-    if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
-      log("🚨 Watchdog Supervisor: Absolute timeout bereikt.");
-      forceCleanupTimeout();
-    }
-  }, 60000); // Verhoogd naar 60 seconden, we vangen het nu immers visueel op
-
- function startWatchdog(requestId) {
   cleanupWatchdog();
   const startTime = Date.now();
   
@@ -93,19 +81,14 @@ function startWatchdog(requestId) {
   window.addEventListener('focus', dynamicWatchdogListener);
 }
 
-  window.addEventListener('click', dynamicWatchdogListener);
-  window.addEventListener('focus', dynamicWatchdogListener);
-}
-
 function cleanupWatchdog() {
   if (watchdogInterval) {
     clearTimeout(watchdogInterval);
     watchdogInterval = null;
   }
-  if (dynamicWatchdogListener) {
-    window.removeEventListener('click', dynamicWatchdogListener);
-    window.removeEventListener('focus', dynamicWatchdogListener);
-    dynamicWatchdogListener = null;
+  if (activeFocusHandler) {
+    window.removeEventListener('focus', activeFocusHandler);
+    activeFocusHandler = null;
   }
 }
 
@@ -187,9 +170,11 @@ export async function connectWallet() {
       return;
     }
 
-    log("🔌 Clearing wallet cache to force picker...");
+    // 🔥 LEGO FIX: Zet de picker-vlag direct omhoog VÓÓR de asynchrone revoke-call 
+    // Dit blokkeert de focus-watchdog voor valse browser-events tijdens het laden
     isPickingWallet = true;
 
+    log("🔌 Clearing wallet cache to force picker...");
     try {
       await window.ethereum.request({
         method: "wallet_revokePermissions",
@@ -256,10 +241,8 @@ export async function connectWallet() {
     if (btnWalletEl) btnWalletEl.disabled = true; // Houd wallet knop gelockt op het adres
     if (btnDisconnect) btnDisconnect.disabled = false;
 
-    setFlowState('IDLE');
-    setProcessing(false);
-    cleanupWatchdog();
-
+   setFlowState('IDLE');
+    // 🔥 LEGO FIX: De opruiming en deblokkering verhuizen naar een gegarandeerde finally-blok
   } catch (e) {
     let errorMessage = e.message;
     if (e.code === "ACTION_REJECTED" || (e.message && e.message.includes("rejected"))) {
@@ -267,6 +250,13 @@ export async function connectWallet() {
     }
     log("❌ Connection cancelled: " + errorMessage);
     forceCleanupTimeout();
+  } finally {
+    // Dit draait ALTIJD, of de verbinding nu slaagt of crasht
+    cleanupWatchdog();
+    setProcessing(false); 
+    if (window.UIbridge && typeof window.UIbridge.forceUnlock === "function") {
+      window.UIbridge.forceUnlock();
+    }
   }
 }
 
@@ -460,6 +450,7 @@ export function authorizeTrading() {
     }
   }, 1000);
 }
+
 export function disconnectWallet() {
   cleanupWatchdog();
   location.reload();
