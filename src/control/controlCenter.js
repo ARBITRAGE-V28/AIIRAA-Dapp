@@ -59,20 +59,16 @@ function startWatchdog(requestId) {
     if (elapsed > 4000) {
       if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId) {
         
-        // Tijdelijk de listener weghalen zodat deze pop-up niet in een oneindige loop raakt bij opeenvolgende kliks
+        // Tijdelijk weghalen om herhalende pop-ups tijdens het lezen te voorkomen
         window.removeEventListener('click', dynamicWatchdogListener);
         
-        log("💡 Watchdog: MetaMask staat vermoedelijk op de achtergrond. Gebruiker informeren...");
+        log("💡 Watchdog: Informing user to wait for MetaMask...");
         
-        const retry = confirm("MetaMask staat al open op de achtergrond of wacht op je pincode/wachtwoord.\n\nKlik op 'OK' om de knoppen te resetten en het opnieuw te proberen, of 'Annuleren' om rustig te wachten.");
+        // 🔥 LEGO FIX: Korte, bondige Engelse melding. Alleen een 'OK' om te sluiten en te wachten.
+        alert("MetaMask is already open. Please check your wallet extension and wait a moment before clicking again.");
         
-        if (retry) {
-          log("🔄 Gebruiker heeft handmatige reset gekozen via pop-up.");
-          forceCleanupTimeout();
-        } else {
-          // Als ze willen wachten, zetten we de listener weer terug voor een eventuele volgende klik
-          window.addEventListener('click', dynamicWatchdogListener);
-        }
+        // Zet de listener weer terug voor het geval ze later nóg een keer klikken
+        window.addEventListener('click', dynamicWatchdogListener);
       }
     }
   };
