@@ -23,7 +23,7 @@ function acquireBridgeLock() {
   if (coolDownTimer) clearTimeout(coolDownTimer);
   coolDownTimer = setTimeout(() => {
     coolDownActive = false;
-  }, 600);
+  }, 1500); // 🔥 LEGO FIX: Verhoogd naar 1500ms voor Vercel stabiliteit
   
   return true;
 }
@@ -41,16 +41,16 @@ async function bridgeConnectWallet() {
 }
 
 function bridgeActivateBot() {
-  // 🔥 LEGO FIX: Controleert puur op actieve verwerking en cooldown zonder oude bridgeLock crash
-  if (coolDownActive || APP_STATE.isProcessing) return;
-  touchInteraction();
+  console.log("🎯 UIbridge: bridgeActivateBot aangeroepen!");
+  // 🔥 LEGO FIX: Gebruikt nu de centrale lock zodat de 1500ms cooldown actief wordt
+  if (!acquireBridgeLock()) return;
   activateBot();
 }
 
 function bridgeAuthorizeTrading() {
-  // 🔥 LEGO FIX: Controleert puur op actieve verwerking en cooldown zonder oude bridgeLock crash
-  if (coolDownActive || APP_STATE.isProcessing) return;
-  touchInteraction();
+  console.log("🎯 UIbridge: bridgeAuthorizeTrading aangeroepen!");
+  // 🔥 LEGO FIX: Gebruikt nu de centrale lock zodat de 1500ms cooldown actief wordt
+  if (!acquireBridgeLock()) return;
   authorizeTrading();
 }
 
