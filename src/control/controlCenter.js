@@ -36,32 +36,37 @@ if (window.ethereum) {
   });
 }
 
-// Bijhouden van de focus handler om memory leaks en dubbele registraties te voorkomen
-let activeFocusHandler = null;
+// 🔥 LEGO FIX: Vervang de oude handlers door een dynamische activiteits-listener
+let dynamicWatchdogListener = null;
 
 function startWatchdog(requestId) {
   cleanupWatchdog();
+  const startTime = Date.now();
   
-  // 1. Tijd-gebaseerde absolute noodrem (failsafe voor vastgelopen RPC/extensie)
+  // 1. Ruime absolute failsafe (voor het geval de gebruiker wegloopt bij de computer)
   watchdogInterval = setTimeout(() => {
     if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
-      log("🚨 Watchdog Supervisor: Timeout bereikt. Geforceerde reset!");
+      log("🚨 Watchdog Supervisor: Absolute timeout bereikt. Geforceerde reset!");
       forceCleanupTimeout();
     }
-  }, WATCHDOG_TIMEOUT_MS); 
+  }, 45000); // 45 seconden maximale ademruimte voor trage browsers / FaceID
 
-// 2. Focus-gebaseerde slimme detectie (gebruiker keert terug in tabblad zonder connectie)
-  activeFocusHandler = () => {
-    setTimeout(() => {
-      // 🔥 LEGO FIX: Voorkom dat de watchdog ingrijpt als de wallet picker (MetaMask) nog actief is
-      if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId && !isPickingWallet) {
-        log("🚨 Watchdog Supervisor: Focus hersteld zonder wallet data. Sluis direct vrijgegeven.");
+  // 2. Slimme activiteits-detector (grijpt in als MetaMask naar de achtergrond verdwijnt)
+  dynamicWatchdogListener = () => {
+    const elapsed = Date.now() - startTime;
+    
+    // Pas activeren als MetaMask minimaal 4 seconden openstaat EN de gebruiker weer op de site klikt of focust
+    if (elapsed > 4000) {
+      if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
+        log("🚨 Watchdog Supervisor: Gebruiker zoekt interactie met site. MetaMask staat waarschijnlijk op de achtergrond. Directe reset!");
         forceCleanupTimeout();
       }
-    }, 300); // <-- Verhogen naar 300ms voor netwerklatency op Vercel
+    }
   };
 
-  window.addEventListener('focus', activeFocusHandler);
+  // Luister naar zowel kliks als tabblad-focus op het hoofdvenster
+  window.addEventListener('click', dynamicWatchdogListener);
+  window.addEventListener('focus', dynamicWatchdogListener);
 }
 
 function cleanupWatchdog() {
@@ -69,9 +74,10 @@ function cleanupWatchdog() {
     clearTimeout(watchdogInterval);
     watchdogInterval = null;
   }
-  if (activeFocusHandler) {
-    window.removeEventListener('focus', activeFocusHandler);
-    activeFocusHandler = null;
+  if (dynamicWatchdogListener) {
+    window.removeEventListener('click', dynamicWatchdogListener);
+    window.removeEventListener('focus', dynamicWatchdogListener);
+    dynamicWatchdogListener = null;
   }
 }
 
