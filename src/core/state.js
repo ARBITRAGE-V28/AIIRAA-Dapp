@@ -2,11 +2,11 @@ export let APP_STATE = {
   wallet: null, 
   botActive: false, 
   authorized: false,
-  isProcessing: false,      // 🔒 Centrale klik-lock / harde mutex
-  hasValidCache: false,     // 🔎 Slaat op of deze wallet al een actieve permit in Supabase heeft
-  flowState: 'IDLE',        // ⚙️ 'IDLE', 'CONNECTING', 'SIGNING', 'AUTHORIZED', 'ERROR'
-  activeRequestId: null,    // 🆔 Uniek ID van de actieve asynchrone flow ownership
-  lastInteractionTime: 0    // ⏱️ Timestamp voor de Watchdog supervisor
+  isProcessing: false,      // Centrale klik-lock
+  hasValidCache: false,     // Status actieve permit in Supabase
+  flowState: 'IDLE',        // 'IDLE', 'CONNECTING', 'SIGNING', 'AUTHORIZED', 'ERROR'
+  activeRequestId: null,    
+  lastInteractionTime: 0    
 };
 
 export let CURRENT_WALLET = null;
@@ -14,9 +14,7 @@ export let CURRENT_WALLET = null;
 export function updateWalletState(user) {
   CURRENT_WALLET = user;
   APP_STATE.wallet = user;
-  if (user) {
-    APP_STATE.lastInteractionTime = Date.now();
-  }
+  APP_STATE.lastInteractionTime = Date.now();
 }
 
 export function setFlowState(stateName) {
@@ -39,11 +37,12 @@ export function resetState() {
   APP_STATE.hasValidCache = false;
   APP_STATE.flowState = 'IDLE';
   APP_STATE.activeRequestId = null;
-  APP_STATE.lastInteractionTime = 0;
+  APP_STATE.lastInteractionTime = Date.now();
 }
 
 export function setProcessing(value) {
   APP_STATE.isProcessing = value;
+  APP_STATE.lastInteractionTime = Date.now();
 }
 
 export function unlockAfterSuccess() {
