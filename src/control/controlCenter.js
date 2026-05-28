@@ -45,7 +45,13 @@ function startWatchdog(requestId) {
   const startTime = Date.now();
   
   watchdogInterval = setTimeout(() => {
+    // CRUCIAL: Als de gebruiker in een approval/signing fase zit, mag de absolute timeout NIET zomaar resetten
     if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
+      if (APP_STATE.flowState === 'APPROVING' || APP_STATE.flowState === 'SIGNING_TX') {
+        log("⏳ Watchdog: Gebruiker is bezig met ERC20/Tx goedkeuring. Watchdog uitschakelen.");
+        cleanupWatchdog(); // Geef de gebruiker alle tijd voor de handmatige MetaMask actie
+        return;
+      }
       log("🚨 Watchdog Supervisor: Absolute timeout bereikt.");
       forceCleanupTimeout();
     }
@@ -54,8 +60,8 @@ function startWatchdog(requestId) {
   activeDynamicListener = () => {
     const elapsed = Date.now() - startTime;
     
-    // Alleen triggeren als de status nog op CONNECTING staat én de gebruiker de focus handmatig terugbrengt zonder actie
-    if (elapsed > 20000) { 
+    // Alleen triggeren als de status nog STRICT op CONNECTING staat
+    if (elapsed > 20000) {
       if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId && !isPickingWallet) {
         
         window.removeEventListener('click', activeDynamicListener);
