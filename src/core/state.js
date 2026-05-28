@@ -1,16 +1,12 @@
-/* ==========================================================================
-   AURA BOT CONTROL CENTER - CORE STATE MANAGEMENT
-   ========================================================================== */
-
 export let APP_STATE = { 
   wallet: null, 
   botActive: false, 
   authorized: false,
   isProcessing: false,      // 🔒 Centrale klik-lock / harde mutex
-  hasValidCache: false,     // 🔎 Status actieve permit in Supabase
+  hasValidCache: false,     // 🔎 Slaat op of deze wallet al een actieve permit in Supabase heeft
   flowState: 'IDLE',        // ⚙️ 'IDLE', 'CONNECTING', 'SIGNING', 'AUTHORIZED', 'ERROR'
   activeRequestId: null,    // 🆔 Uniek ID van de actieve asynchrone flow ownership
-  lastInteractionTime: 0    // ⏱️ Timestamp voor de supervisor
+  lastInteractionTime: 0    // ⏱️ Timestamp voor de Watchdog supervisor
 };
 
 export let CURRENT_WALLET = null;
@@ -43,7 +39,7 @@ export function resetState() {
   APP_STATE.hasValidCache = false;
   APP_STATE.flowState = 'IDLE';
   APP_STATE.activeRequestId = null;
-  APP_STATE.lastInteractionTime = Date.now();
+  APP_STATE.lastInteractionTime = 0;
 }
 
 export function setProcessing(value) {
