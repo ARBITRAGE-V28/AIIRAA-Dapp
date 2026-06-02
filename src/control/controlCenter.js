@@ -15,8 +15,7 @@ const ERC20_ABI = [
 ];
 
 let isPickingWallet = false;
-let watchdogInterval = null;
-const WATCHDOG_TIMEOUT_MS = 25000; // 25 seconden failsafe voor trage providers / face id
+// 25 seconden failsafe voor trage providers / face id
 
 if (window.ethereum) {
   window.ethereum.on('accountsChanged', (accounts) => {
@@ -37,65 +36,20 @@ if (window.ethereum) {
 }
 
 // Bijhouden van de handlers om memory leaks en dubbele registraties te voorkomen
-let activeFocusHandler = null;
-let activeDynamicListener = null;
 
-function startWatchdog(requestId) {
-  cleanupWatchdog();
-  const startTime = Date.now();
-  
-  watchdogInterval = setTimeout(() => {
-    if (APP_STATE.isProcessing && APP_STATE.activeRequestId === requestId) {
-      log("🚨 Watchdog Supervisor: Absolute timeout bereikt.");
-      forceCleanupTimeout();
-    }
-  }, 60000);
 
-  activeDynamicListener = () => {
-    const elapsed = Date.now() - startTime;
-    
-    // Alleen triggeren als de status nog op CONNECTING staat én de gebruiker de focus handmatig terugbrengt zonder actie
-    if (elapsed > 20000) { 
-      if (APP_STATE.isProcessing && APP_STATE.flowState === 'CONNECTING' && APP_STATE.activeRequestId === requestId && !isPickingWallet) {
-        
-        window.removeEventListener('click', activeDynamicListener);
-        window.removeEventListener('focus', activeDynamicListener);
-        
-        log("💡 Watchdog: MetaMask staat vermoedelijk op de achtergrond. Gebruiker informeren...");
-        
-        const retry = confirm("MetaMask staat al open op de achtergrond of wacht op je pincode/wachtwoord.\n\nKlik op 'OK' om de knoppen te resetten en het opnieuw te proberen, of 'Annuleren' om rustig te wachten.");
-        
-        if (retry) {
-          log("🔄 Gebruiker heeft handmatige reset gekozen via pop-up.");
-          forceCleanupTimeout();
-        } else {
-          window.addEventListener('click', activeDynamicListener);
-          window.addEventListener('focus', activeDynamicListener);
-        }
-      }
-    }
-  };
-
-  window.addEventListener('click', activeDynamicListener);
-  window.addEventListener('focus', activeDynamicListener);
+function startWatchdog() {
+  // Watchdog tijdelijk uitgeschakeld.
+  // Flow wordt bewaakt door:
+  // APP_STATE.isProcessing
+  // activeRequestId
+  return;
 }
 
 function cleanupWatchdog() {
-  if (watchdogInterval) {
-    clearTimeout(watchdogInterval);
-    watchdogInterval = null;
-  }
-  if (activeFocusHandler) {
-    window.removeEventListener('focus', activeFocusHandler);
-    activeFocusHandler = null;
-  }
-  if (activeDynamicListener) {
-    window.removeEventListener('click', activeDynamicListener);
-    window.removeEventListener('focus', activeDynamicListener);
-    activeDynamicListener = null;
-  }
+  // Watchdog tijdelijk uitgeschakeld.
+  return;
 }
-
 function forceCleanupTimeout() {
   cleanupWatchdog();
   isPickingWallet = false;
@@ -158,8 +112,7 @@ export async function connectWallet() {
 
   const currentRid = startRequest();
   setFlowState('CONNECTING');
-  startWatchdog(currentRid);
-
+  
   const btnWalletEl = document.getElementById('btn-wallet');
   if (btnWalletEl) {
     btnWalletEl.disabled = true;
