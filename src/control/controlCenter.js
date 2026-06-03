@@ -360,12 +360,15 @@ const payload = {
   chainId: Number(chainId)
 };
 
+
+
 console.log("API URL:", "https://api.aiiraa.com/api/permit");
 console.log("PAYLOAD:", payload);
 
 try {
 
   const res = await fetch("https://api.aiiraa.com/api/permit", {
+    
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -385,7 +388,7 @@ try {
 
 } catch (err) {
 
-  console.error("FETCH CRASH:", err);
+
 
   throw err;
 }
