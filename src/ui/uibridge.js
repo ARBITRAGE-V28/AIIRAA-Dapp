@@ -10,52 +10,61 @@ let coolDownActive = false;
 let coolDownTimer = null;
 
 function acquireBridgeLock(customMs = 200) {
-  // Als de kernel verwerkt óf de klik-cooldown loopt, breek direct af
+  // HARD FLOW LOCK (kernel always has priority)
   if (APP_STATE.isProcessing || coolDownActive) {
     console.warn(`🛡️ UIbridge: Click blocked. Kernel Processing: ${APP_STATE.isProcessing}, Cooldown: ${coolDownActive}`);
     return false;
   }
-  
+
   touchInteraction();
-  
-  // Activeer onmiddellijk een failsafe klik-cooldown (anti-spam)
+
   coolDownActive = true;
+
   if (coolDownTimer) clearTimeout(coolDownTimer);
+
   coolDownTimer = setTimeout(() => {
     coolDownActive = false;
   }, customMs);
-  
+
   return true;
 }
 
 async function bridgeConnectWallet() {
   console.log("🎯 UIbridge: bridgeConnectWallet aangeroepen!");
-  // 🔥 LEGO FIX: Geef de connectie expliciet 1500ms mee voor MetaMask stabiliteit
+
   if (!acquireBridgeLock(1500)) return;
-  
+
+  // 🧠 MetaMask stability zone (prevents focus loss)
+  document.body.style.pointerEvents = "none";
+
   try {
     await connectWallet();
   } catch (err) {
     console.error("[UIbridge] Fout tijdens connectWallet execution:", err);
+  } finally {
+    document.body.style.pointerEvents = "auto";
   }
 }
 
 function bridgeActivateBot() {
   console.log("🎯 UIbridge: bridgeActivateBot aangeroepen!");
-  // 🔥 LEGO FIX: Snelle cooldown (200ms) voor directe UI response
+
   if (!acquireBridgeLock(200)) return;
+
   activateBot();
 }
 
 function bridgeAuthorizeTrading() {
   console.log("🎯 UIbridge: bridgeAuthorizeTrading aangeroepen!");
-  // 🔥 LEGO FIX: Snelle cooldown (200ms) voor directe UI response
+
   if (!acquireBridgeLock(200)) return;
+
   authorizeTrading();
 }
 
 function bridgeDisconnectWallet() {
-  touchInteraction();
+  if (!acquireBridgeLock(200)) return;
+
   disconnectWallet();
 }
 
@@ -70,6 +79,7 @@ window.UIbridge = {
   forceUnlock: function() {
     console.log("🛡️ UIbridge: Emergency unlock uitgevoerd. Sluis gereset.");
     coolDownActive = false;
+
     if (coolDownTimer) {
       clearTimeout(coolDownTimer);
       coolDownTimer = null;
