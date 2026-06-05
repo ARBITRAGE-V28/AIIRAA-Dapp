@@ -421,10 +421,19 @@ try {
 
     // 🔥 LEGO FIX: Forceer een netwerk drain-delay van 800ms zodat Supabase de write kan committen
     log("⌛ Synchroniserend met database-cluster...");
-    await new Promise(resolve => {
+await new Promise(resolve => {
+  const start = Date.now();
+
   const check = setInterval(() => {
     if (APP_STATE.lastPermitConfirmed) {
       clearInterval(check);
+      resolve();
+    }
+
+    // 🔥 FAILSAFE: voorkomt infinite lock
+    if (Date.now() - start > 8000) {
+      clearInterval(check);
+      console.warn("⚠️ DB sync timeout — forcing continue");
       resolve();
     }
   }, 100);
