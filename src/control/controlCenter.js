@@ -15,6 +15,9 @@ const ERC20_ABI = [
 ];
 
 let isPickingWallet = false;
+
+let watchdogTimer = null;
+let popupMonitor = null;
 // 25 seconden failsafe voor trage providers / face id
 
 if (window.ethereum) {
@@ -112,6 +115,8 @@ export async function connectWallet() {
 
   const currentRid = startRequest();
   setFlowState('CONNECTING');
+
+  
   
   const btnWalletEl = document.getElementById('btn-wallet');
   if (btnWalletEl) {

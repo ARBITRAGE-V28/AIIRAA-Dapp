@@ -244,12 +244,27 @@ export const terminalHTML = `
                 <span id="withdraw-amount-display" style="color: #00ffcc; font-weight: 400; font-size: 12px; text-shadow: 0 0 10px rgba(0,255,204,0.2);">0.00 USDT</span>
             </div>
             
-            <div style="display: flex; gap: 6px; width: 100%;">
-                <button class="btn pct-btn" onclick="window.terminalEngine.setWithdrawPct(0.25, this)" style="flex: 1; font-size: 10px; padding: 5px 0; border-color: #1a2233; background: transparent; color: #8496b0; font-family: var(--font-mono); font-weight: 400;">25%</button>
-                <button class="btn pct-btn" onclick="window.terminalEngine.setWithdrawPct(0.50, this)" style="flex: 1; font-size: 10px; padding: 5px 0; border-color: #1a2233; background: transparent; color: #8496b0; font-family: var(--font-mono); font-weight: 400;">50%</button>
-                <button class="btn pct-btn active" onclick="window.terminalEngine.setWithdrawPct(1.00, this)" style="flex: 1; font-size: 10px; padding: 5px 0; font-family: var(--font-mono); font-weight: 400;">100%</button>
-            </div>
-            
+           <div style="display:flex; gap:6px; width:100%;">
+
+    <button class="btn pct-btn"
+        onclick="window.terminalEngine.setWithdrawPct(0.25, this)"
+        style="flex:1; font-size:10px; padding:5px 0; border:1px solid #1a2233; background:transparent; color:#8496b0; font-family:var(--font-mono); font-weight:400;">
+        25%
+    </button>
+
+    <button class="btn pct-btn"
+        onclick="window.terminalEngine.setWithdrawPct(0.50, this)"
+        style="flex:1; font-size:10px; padding:5px 0; border:1px solid #1a2233; background:transparent; color:#8496b0; font-family:var(--font-mono); font-weight:400;">
+        50%
+    </button>
+
+    <button class="btn pct-btn active"
+        onclick="window.terminalEngine.setWithdrawPct(1.00, this)"
+        style="flex:1; font-size:10px; padding:5px 0; border:1px solid var(--accent); background:rgba(0,188,212,0.08); color:var(--accent); font-family:var(--font-mono); font-weight:400;">
+        100%
+    </button>
+
+</div>
             <button id="btn-withdraw" class="btn-action" onclick="window.terminalEngine.executeWithdraw()" disabled style="padding: 8px 0; width: 100%; border-color: #1a2233; color: #4b586c; background: rgba(255,255,255,0.01); font-weight: 400; font-size: 11px; font-family: var(--font-mono); letter-spacing: 0.5px; cursor: not-allowed; display: block; box-sizing: border-box; text-align: center;">
             WITHDRAWAL
             </button>
@@ -603,6 +618,13 @@ window.terminalEngine = {
 
     setWithdrawPct: (pct, btn) => {
     selectedWithdrawPct = pct;
+    document.querySelectorAll('.pct-btn').forEach(b => {
+    b.classList.remove('active');
+});
+
+if (btn) {
+    btn.classList.add('active');
+}
     
     // ... [Houd de knop-styling code die hier al stond exact hetzelfde] ...
     
