@@ -216,7 +216,7 @@ export const controlCenterHTML = `
 
 <div class="control-root bot-control-root">
     <div class="panel">
-        <div class="panel-header">Bot Control</div>
+        <div class="panel-header">AIIRAA CONTROL CENTER</div>
         <div class="module-body">
 
             <div class="btn-stack">
