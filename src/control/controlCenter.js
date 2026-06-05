@@ -382,9 +382,10 @@ try {
 
   console.log("RESPONSE:", responseText);
 
-  if (!res.ok) {
-    throw new Error(responseText || "backend failure");
-  }
+ if (!res.ok) {
+  log("❌ Backend error raw: " + responseText);
+  return; // ⛔ geen throw meer
+}
 
 } catch (err) {
 
@@ -398,7 +399,14 @@ try {
 
     // 🔥 LEGO FIX: Forceer een netwerk drain-delay van 800ms zodat Supabase de write kan committen
     log("⌛ Synchroniserend met database-cluster...");
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => {
+  const check = setInterval(() => {
+    if (APP_STATE.lastPermitConfirmed) {
+      clearInterval(check);
+      resolve();
+    }
+  }, 100);
+});
     log("📊 Database write succesvol verwerkt.");
 
   } catch (e) {
