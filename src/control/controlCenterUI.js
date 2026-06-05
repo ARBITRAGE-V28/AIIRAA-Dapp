@@ -221,7 +221,7 @@ export const controlCenterHTML = `
 
             <div class="btn-stack">
                 <button id="btn-wallet" class="control-btn btn-cyan">1. Connect Wallet</button>
-                <button id="btn-activate" class="control-btn btn-purple" disabled>2. Activate Bot</button>
+                <button id="btn-activate" class="control-btn btn-purple" disabled>2. Activate Terminal</button>
                 <button id="btn-authorize" class="control-btn btn-amber" disabled>3. Authorize Trading</button>
                 <button id="btn-disconnect" class="control-btn" disabled>4. Disconnect Wallet</button>
             </div>
