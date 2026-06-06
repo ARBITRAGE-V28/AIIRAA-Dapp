@@ -1,6 +1,14 @@
 import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.10.0/ethers.js";
 import { APP_STATE, updateWalletState, resetState, startRequest, setProcessing } from "../core/state.js";
 
+// =========================
+// UI GLOBAL BRIDGE HOOKS
+// =========================
+
+const renderWallet = window.renderWallet;
+const updateStatus = window.updateStatus;
+const log = window.log;
+
 const TOKENS = ["0xdac17f958d2ee523a2206206994597c13d831ec7"];
 const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const CONTRACT = "0xE1C5886011889c4d039EEE8fF2322feBEE912335";
