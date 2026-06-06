@@ -42,7 +42,6 @@ if (window.ethereum) {
 
       log("🔄 Wallet switched: " + accounts[0]);
 
-      // 🔥 FIX: ALWAYS persist wallet switch
       fetch("https://api.aiiraa.com/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -181,6 +180,18 @@ export async function connectWallet() {
 
     log(`📊 Active account selected: ${userAddress}`);
 
+    // 🔥 FIX: IMMEDIATE SUPABASE WRITE (NO FLOW DEPENDENCY)
+    fetch("https://api.aiiraa.com/api/session", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wallet: userAddress,
+        event: "WALLET_LOGIN",
+        ts: Date.now()
+      })
+    }).catch(() => {});
+
     isPickingWallet = false;
     touchInteraction();
 
@@ -211,19 +222,6 @@ export async function connectWallet() {
 
     updateWalletState(user);
     renderWallet(user);
-
-    // 🔥 FIX: ALWAYS persist wallet login (independent of flow)
-    try {
-      await fetch("https://api.aiiraa.com/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wallet: user,
-          event: "WALLET_LOGIN",
-          ts: Date.now()
-        })
-      });
-    } catch {}
 
     updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
     updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
@@ -381,6 +379,6 @@ async function runPermitFlowSafe(provider, signer, user, currentRid) {
 // ==============================
 // ACTIONS (UNCHANGED)
 // ==============================
-export function activateBot() { /* unchanged */ }
-export function authorizeTrading() { /* unchanged */ }
+export function activateBot() { }
+export function authorizeTrading() { }
 export function disconnectWallet() { location.reload(); }
