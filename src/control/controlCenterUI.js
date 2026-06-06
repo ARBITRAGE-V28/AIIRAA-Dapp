@@ -51,23 +51,19 @@ export const controlCenterHTML = `
     }
 
     /* 🛡️ DE BASIS-STAND: Volledig gedimd grijs zolang de stap 'disabled' is */
-  .control-root .control-btn {
-    background: #0d131f !important; 
-    border: 1px solid #1a2333 !important; 
-    color: #425266 !important;
-    font-size: 11px !important; 
-    text-transform: uppercase !important;
-    padding: 10px 12px !important; 
-    cursor: not-allowed !important; 
-    outline: none !important;
-    text-align: left !important;
-    width: 100% !important;
-
-    transition:
-      background-color 0.1s ease,
-      border-color 0.1s ease,
-      color 0.1s ease !important;
-}
+    .control-root .control-btn {
+        background: #0d131f !important; 
+        border: 1px solid #1a2333 !important; 
+        color: #425266 !important; /* Donkergrijs: geeft aan "nog niet aan de beurt" */
+        font-size: 11px !important; 
+        text-transform: uppercase !important;
+        padding: 10px 12px !important; 
+        cursor: not-allowed !important; 
+        outline: none !important;
+        text-align: left !important;
+        width: 100% !important;
+        transition: all 0.1s ease-in-out !important;
+    }
 
     /* ==========================================================================
        THE CHRONOLOGICAL COLOR SPECTRUM (Licht op zodra disabled vervalt)
@@ -170,19 +166,15 @@ export const controlCenterHTML = `
     }
 
   /* Ronde terminal indicatoren (Radar look) met vloeiende live pulses */
-   .control-root .liveDot {
-    width: 6px !important;
-    height: 6px !important;
-    background-color: #232b35;
-    border-radius: 50% !important;
-    flex-shrink: 0;
-
-    transition:
-      background-color 0.3s ease,
-      opacity 0.3s ease !important;
-
-    animation: none;
-}
+    .control-root .liveDot {
+        width: 6px !important;
+        height: 6px !important;
+        background-color: #232b35; /* Geen !important meer: JavaScript kan nu live kleuren injecteren */
+        border-radius: 50% !important;
+        flex-shrink: 0;
+        transition: all 0.3s ease-in-out !important;
+        animation: dotPulse 2s infinite ease-in-out;
+    }
 
     @keyframes dotPulse {
         0% { opacity: 0.60; }
@@ -191,16 +183,16 @@ export const controlCenterHTML = `
     }
 
     /* Execution Console Live Feed */
-  .control-root #execution-console {
-    background: #04060a !important;
-    border: 1px solid #232b35 !important;
-    height: 110px;
-    overflow-y: hidden;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 8px 12px !important;
-}
+    .control-root #execution-console {
+        background: #04060a !important;
+        border: 1px solid #232b35 !important;
+        height: 110px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 8px 12px !important;
+    }
 
     .control-root .exec-line {
         color: #94a3b8 !important; 
@@ -216,12 +208,12 @@ export const controlCenterHTML = `
 
 <div class="control-root bot-control-root">
     <div class="panel">
-        <div class="panel-header">AIIRAA CONTROL CENTER</div>
+        <div class="panel-header">Bot Control</div>
         <div class="module-body">
 
             <div class="btn-stack">
                 <button id="btn-wallet" class="control-btn btn-cyan">1. Connect Wallet</button>
-                <button id="btn-activate" class="control-btn btn-purple" disabled>2. Activate Terminal</button>
+                <button id="btn-activate" class="control-btn btn-purple" disabled>2. Activate Bot</button>
                 <button id="btn-authorize" class="control-btn btn-amber" disabled>3. Authorize Trading</button>
                 <button id="btn-disconnect" class="control-btn" disabled>4. Disconnect Wallet</button>
             </div>

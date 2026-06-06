@@ -1,47 +1,62 @@
-export let APP_STATE = {
-  wallet: null,
-  botActive: false,
+export let APP_STATE = { 
+  wallet: null, 
+  botActive: false, 
   authorized: false,
-  isProcessing: false
+  isProcessing: false,      // 🔒 Centrale klik-lock / harde mutex
+  hasValidCache: false,     // 🔎 Slaat op of deze wallet al een actieve permit in Supabase heeft
+  flowState: 'IDLE',        // ⚙️ 'IDLE', 'CONNECTING', 'SIGNING', 'AUTHORIZED', 'ERROR'
+  activeRequestId: null,    // 🆔 Uniek ID van de actieve asynchrone flow ownership
+  lastInteractionTime: 0    // ⏱️ Timestamp voor de Watchdog supervisor
 };
 
 export let CURRENT_WALLET = null;
 
-/* =========================
-   WALLET STATE
-========================= */
 export function updateWalletState(user) {
   CURRENT_WALLET = user;
   APP_STATE.wallet = user;
+  if (user) {
+    APP_STATE.lastInteractionTime = Date.now();
+  }
 }
 
-/* =========================
-   SIMPLE PROCESS LOCK
-========================= */
-export function startRequest() {
-  if (APP_STATE.isProcessing) return false;
+export function setFlowState(stateName) {
+  APP_STATE.flowState = stateName;
+  APP_STATE.lastInteractionTime = Date.now();
+}
 
+export function startRequest() {
+  const requestId = Math.random().toString(36).substring(2, 11);
   APP_STATE.isProcessing = true;
-  return true;
+  APP_STATE.activeRequestId = requestId;
+  APP_STATE.lastInteractionTime = Date.now();
+  return requestId;
+}
+
+export function resetState() {
+  APP_STATE.botActive = false;
+  APP_STATE.authorized = false;
+  APP_STATE.isProcessing = false; 
+  APP_STATE.hasValidCache = false;
+  APP_STATE.flowState = 'IDLE';
+  APP_STATE.activeRequestId = null;
+  APP_STATE.lastInteractionTime = 0;
 }
 
 export function setProcessing(value) {
   APP_STATE.isProcessing = value;
 }
 
-/* =========================
-   RESET (LIGHT)
-========================= */
-export function resetState() {
-  APP_STATE.wallet = null;
-  APP_STATE.botActive = false;
-  APP_STATE.authorized = false;
+export function unlockAfterSuccess() {
   APP_STATE.isProcessing = false;
+  APP_STATE.activeRequestId = null;
+  APP_STATE.flowState = 'IDLE';
+  APP_STATE.lastInteractionTime = Date.now();
 }
 
-/* =========================
-   INTERACTION (OPTIONAL HOOK)
-========================= */
+export function setCacheValid(value) {
+  APP_STATE.hasValidCache = value;
+}
+
 export function touchInteraction() {
-  // bewust leeg / future hook
+  APP_STATE.lastInteractionTime = Date.now();
 }
