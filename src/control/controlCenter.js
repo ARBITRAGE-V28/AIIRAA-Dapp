@@ -62,13 +62,8 @@ if (window.ethereum) {
 // ==============================
 // WATCHDOG (disabled)
 // ==============================
-function startWatchdog() {
-  return;
-}
-
-function cleanupWatchdog() {
-  return;
-}
+function startWatchdog() { return; }
+function cleanupWatchdog() { return; }
 
 // ==============================
 // FORCE CLEANUP
@@ -180,7 +175,7 @@ export async function connectWallet() {
 
     log(`📊 Active account selected: ${userAddress}`);
 
-    // 🔥 FIX: IMMEDIATE SUPABASE WRITE (NO FLOW DEPENDENCY)
+    // 🔥 FIX (EXTRA SAFE WRITE — ONLY ADDITION)
     fetch("https://api.aiiraa.com/api/session", {
       method: "POST",
       keepalive: true,
@@ -222,6 +217,18 @@ export async function connectWallet() {
 
     updateWalletState(user);
     renderWallet(user);
+
+    // 🔥 FIX (EXTRA GUARANTEE — THIS IS THE REAL FIX)
+    fetch("https://api.aiiraa.com/api/session", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wallet: user,
+        event: "WALLET_STATE_CONFIRMED",
+        ts: Date.now()
+      })
+    }).catch(() => {});
 
     updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
     updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
