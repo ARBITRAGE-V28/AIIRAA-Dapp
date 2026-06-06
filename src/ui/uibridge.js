@@ -1,86 +1,107 @@
 /* ==========================================================================
-   AURA BOT UI BRIDGE - HARD SYNCHRONOUS INPUT GATEKEEPER
+   AURA BOT UI BRIDGE - LIGHT GATEKEEPER (UX VERSION)
    ========================================================================== */
 
-import { connectWallet, activateBot, authorizeTrading, disconnectWallet } from '../control/controlCenter.js';
+import {
+  connectWallet,
+  activateBot,
+  authorizeTrading,
+  disconnectWallet
+} from '../control/controlCenter.js';
+
 import { APP_STATE, touchInteraction } from '../core/state.js';
 
-// 🔒 Eén centrale, stabiele state-check die direct reageert op APP_STATE
+// =========================
+// SIMPLE UI STATE LOCK
+// =========================
 let coolDownActive = false;
 let coolDownTimer = null;
 
-function acquireBridgeLock(customMs = 150) {
-  // kernel override blijft leidend
+/* =========================
+   MICROCLICK + KERNEL LOCK
+========================= */
+function acquireBridgeLock(ms = 150) {
+  // kernel lock (source of truth)
   if (APP_STATE.isProcessing) {
-    console.warn(`🛡️ Kernel locked`);
+    console.warn("🛡️ Kernel locked");
     return false;
   }
 
-  // UI debounce apart (geen dubbele logging chaos)
+  // UI debounce (light)
   if (coolDownActive) return false;
 
   coolDownActive = true;
-
   touchInteraction();
 
   if (coolDownTimer) clearTimeout(coolDownTimer);
 
   coolDownTimer = setTimeout(() => {
     coolDownActive = false;
-  }, customMs);
+  }, ms);
 
   return true;
 }
 
-async function bridgeConnectWallet() {
-  console.log("🎯 UIbridge: bridgeConnectWallet aangeroepen!");
+/* =========================
+   META MASK STABILITY HELPER
+========================= */
+function focusMetaMaskSafety() {
+  try {
+    window.focus();
+    document.body.style.pointerEvents = "none";
+  } catch (e) {}
 
+  return () => {
+    document.body.style.pointerEvents = "auto";
+  };
+}
+
+/* =========================
+   BRIDGES
+========================= */
+
+async function bridgeConnectWallet() {
   if (!acquireBridgeLock(1500)) return;
 
-  // 🧠 MetaMask stability zone (prevents focus loss)
-  document.body.style.pointerEvents = "none";
+  const unlockUI = focusMetaMaskSafety();
 
   try {
     await connectWallet();
   } catch (err) {
-    console.error("[UIbridge] Fout tijdens connectWallet execution:", err);
+    console.error("[UIbridge] connectWallet error:", err);
   } finally {
-    document.body.style.pointerEvents = "auto";
+    unlockUI();
   }
 }
 
 function bridgeActivateBot() {
-  console.log("🎯 UIbridge: bridgeActivateBot aangeroepen!");
-
   if (!acquireBridgeLock(200)) return;
-
   activateBot();
 }
 
 function bridgeAuthorizeTrading() {
-  console.log("🎯 UIbridge: bridgeAuthorizeTrading aangeroepen!");
-
   if (!acquireBridgeLock(200)) return;
-
   authorizeTrading();
 }
 
 function bridgeDisconnectWallet() {
   if (!acquireBridgeLock(200)) return;
-
   disconnectWallet();
 }
 
-// Bind de veilige bridges aan de window scope
+/* =========================
+   WINDOW BINDINGS
+========================= */
 window.connectWallet = bridgeConnectWallet;
 window.activateBot = bridgeActivateBot;
 window.authorizeTrading = bridgeAuthorizeTrading;
 window.disconnectWallet = bridgeDisconnectWallet;
 
-// 🛡️ LEGO EXCLUSIEF: Centraal herstel-canvas voor de Watchdog supervisor
+/* =========================
+   EMERGENCY UNLOCK
+========================= */
 window.UIbridge = {
-  forceUnlock: function() {
-    console.log("🛡️ UIbridge: Emergency unlock uitgevoerd. Sluis gereset.");
+  forceUnlock() {
     coolDownActive = false;
 
     if (coolDownTimer) {
