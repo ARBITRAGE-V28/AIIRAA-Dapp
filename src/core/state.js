@@ -28,8 +28,13 @@ export function setFlowState(stateName) {
 }
 
 export function startRequest() {
+  // 🔐 prevent double lock overwrite
+  if (APP_STATE.isProcessing) return false;
+
   APP_STATE.isProcessing = true;
   APP_STATE.lastInteractionTime = Date.now();
+
+  return true;
 }
 
 export function resetState() {
@@ -46,9 +51,14 @@ export function resetState() {
 }
 
 export function setProcessing(value) {
-  APP_STATE.isProcessing = value;
-}
+  // 🔐 voorkomt dat async UIbridge unlock state breekt
+  if (value === false && APP_STATE.flowState === 'CONNECTING') {
+    return;
+  }
 
+  APP_STATE.isProcessing = value;
+  APP_STATE.lastInteractionTime = Date.now();
+}
 export function unlockAfterSuccess() {
   APP_STATE.isProcessing = false;
   APP_STATE.flowState = 'IDLE';

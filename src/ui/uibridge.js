@@ -9,16 +9,19 @@ import { APP_STATE, touchInteraction } from '../core/state.js';
 let coolDownActive = false;
 let coolDownTimer = null;
 
-function acquireBridgeLock(customMs = 200) {
-  // HARD FLOW LOCK (kernel always has priority)
-  if (APP_STATE.isProcessing || coolDownActive) {
-    console.warn(`🛡️ UIbridge: Click blocked. Kernel Processing: ${APP_STATE.isProcessing}, Cooldown: ${coolDownActive}`);
+function acquireBridgeLock(customMs = 150) {
+  // kernel override blijft leidend
+  if (APP_STATE.isProcessing) {
+    console.warn(`🛡️ Kernel locked`);
     return false;
   }
 
-  touchInteraction();
+  // UI debounce apart (geen dubbele logging chaos)
+  if (coolDownActive) return false;
 
   coolDownActive = true;
+
+  touchInteraction();
 
   if (coolDownTimer) clearTimeout(coolDownTimer);
 
