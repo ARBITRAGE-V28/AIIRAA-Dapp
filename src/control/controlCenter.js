@@ -149,14 +149,12 @@ export async function connectWallet() {
     log("🔌 Opening Wallet Picker — Please select an account...");
 touchInteraction();
 
-// 🧊 UI FREEZE ZONE (MetaMask critical section)
+// 🔐 STATE ONLY (NO DOM FREEZE)
 setFlowState('CONNECTING');
 
-document.body.style.pointerEvents = "none";
-
-const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-
-document.body.style.pointerEvents = "auto";
+const accounts = await window.ethereum.request({
+  method: "eth_requestAccounts"
+});
     const userAddress = accounts[0];
 
     // 🧠 SAFE SYNC AFTER META MASK RETURNS
@@ -408,6 +406,12 @@ try {
   log("❌ Backend error raw: " + responseText);
   return; // ⛔ geen throw meer
 }
+
+
+log("📊 Database write succesvol verwerkt");
+
+// 🔥 FIX: sync flag pas zetten NA volledige flow completion
+APP_STATE.lastPermitConfirmed = true;
 
 } catch (err) {
 
