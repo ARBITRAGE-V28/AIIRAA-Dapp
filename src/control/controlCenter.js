@@ -12,6 +12,32 @@ const ERC20_ABI = [
 
 let isPickingWallet = false;
 
+
+/* =========================
+   LOCAL UI HELPERS (LIGHT)
+========================= */
+
+function renderWallet(address) {
+  const btn = document.getElementById('btn-wallet');
+  if (btn) {
+    btn.innerText =
+      address.substring(0, 6) +
+      "..." +
+      address.substring(address.length - 4);
+  }
+
+  const dot = document.getElementById('dot-wallet');
+  const label = document.getElementById('st-wallet');
+
+  if (dot && label) {
+    dot.style.background = '#06b6d4';
+    dot.style.boxShadow = '0 0 12px #06b6d4';
+    label.innerText = 'CONNECTED';
+    label.style.color = '#06b6d4';
+  }
+}
+
+
 /* =========================
    WALLET CHANGE (MINIMAL)
 ========================= */
@@ -23,7 +49,7 @@ if (window.ethereum) {
       resetState();
       updateWalletState(accounts[0]);
 
-      if (typeof renderWallet === "function") renderWallet(accounts[0]);
+      renderWallet(accounts[0]);
       if (typeof updateStatus === "function") {
         updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
         updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
